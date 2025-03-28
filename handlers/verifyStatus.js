@@ -1,8 +1,9 @@
 import { InteractionResponseType } from 'discord-interactions';
 import db from '../models/index.js';
 import { verifyPlatformAccount } from '../utils/platformVerification.js';
-import addRole from '../utils/roleManager.js';
+import { addRole } from '../utils/discordManager.js';
 import { MessageTemplates } from '../utils/messageTemplates.js';
+import { sendDM } from '../utils/discordManager.js';
 
 export default async function handleVerifyStatus(req, res, guild, member, options) {
   const platform = options.find(opt => opt.name === 'platform').value;
@@ -30,8 +31,6 @@ export default async function handleVerifyStatus(req, res, guild, member, option
       if (!guildId) {
         throw new Error('Guild ID is undefined');
       }
-      
-      // await addRole(member.user.id, guildId, process.env[`${platform.toUpperCase()}_ROLE_NAME`]); 
 
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -47,12 +46,18 @@ export default async function handleVerifyStatus(req, res, guild, member, option
 
     // Then attempt verification (this happens after we've already sent the response)
     const isVerified = await verifyPlatformAccount(platform, username, account.verificationCode);
+
+    console.log("isVerified", isVerified);
     
     if (isVerified) {
       await account.update({ isVerified: true });
       await basicUser.update({ isVerified: true });
 
-      await addRole(member.user.id, guildId, process.env[`${platform.toUpperCase()}_ROLE_NAME`]);
+      await addRole(member.user.id, guildId, process.env[`${platform.toUpperCase()}_ROLE_NAME`], false);
+
+      await sendDM(member.user.id, MessageTemplates.verificationSuccess(platform, username));
+    } else {
+      await sendDM(member.user.id, MessageTemplates.verificationFailed(platform, username, account.verificationCode));
     }
 
   } catch (error) {

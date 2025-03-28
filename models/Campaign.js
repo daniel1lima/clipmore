@@ -16,8 +16,8 @@ export default (sequelize) => {
       allowNull: true,
     },
     status: {
-      type: DataTypes.ENUM("DRAFT", "ACTIVE", "PAUSED", "COMPLETED"),
-      defaultValue: "DRAFT",
+      type: DataTypes.ENUM("ACTIVE", "PAUSED", "COMPLETED"),
+      defaultValue: "ACTIVE",
     },
     rate: {
       type: DataTypes.FLOAT,
@@ -46,6 +46,11 @@ export default (sequelize) => {
       allowNull: false,
       defaultValue: DataTypes.NOW,
     },
+    allowedPlatforms: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      allowNull: false,
+      defaultValue: ["INSTAGRAM", "TIKTOK", "YOUTUBE", "X"],
+    },
     endDate: {
       type: DataTypes.DATE,
       allowNull: true,
@@ -54,6 +59,10 @@ export default (sequelize) => {
       type: DataTypes.STRING,
       allowNull: false,
     },
+    soundURL: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      allowNull: true
+    }
   });
 
   // Define associations in the model

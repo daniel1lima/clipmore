@@ -1,10 +1,11 @@
 import { InteractionResponseType } from 'discord-interactions';
 import db from '../models/index.js';
-import { validateClipUrl, extractClipMetadata } from '../utils/clipValidation.js';
+import { extractClipMetadata } from '../utils/extractMetadata.js';
 import { MessageTemplates } from '../utils/messageTemplates.js';
-import client from '../utils/discordClient.js';
+import { sendDM } from '../utils/discordManager.js';
 
-export default async function handleUpload(req, res, member, options) {
+
+export default async function handleUpload(req, res, member, options, guild) {
   const urlsString = options.find(opt => opt.name === 'urls').value;
   const urls = urlsString.split(',').map(url => url.trim()).slice(0, 10);
 
@@ -14,10 +15,33 @@ export default async function handleUpload(req, res, member, options) {
     data: MessageTemplates.uploadProcessing(urls.length)
   });
 
+  console.log(member.user.id);
+  console.log(guild);
+
   try {
     const user = await db.User.findOne({
       where: { discordId: member.user.id },
     });
+
+    // Check if user exists first
+    if (!user) {
+      await sendDM(member.user.id, MessageTemplates.noUserFound());
+      return;
+    }
+
+    // ACTIVE CAMPAIGN ONLY
+    const activeCampaign = await db.Campaign.findOne({
+      where: {
+        discordGuildId: guild.id,
+        status: 'DRAFT'
+        // TODO: CHANGE THIS
+      }
+    });
+
+    if (!activeCampaign) {
+      sendDM(member.user.id, MessageTemplates.noCampaignFound());
+      return;
+    }
 
     const socialMediaAccounts = await db.SocialMediaAccount.findAll({
       where: { userId: user.id, isVerified: true }
@@ -33,33 +57,71 @@ export default async function handleUpload(req, res, member, options) {
 
     for (const url of urls) {
       try {
-        const { platform, username } = await validateClipUrl(url);
-        const account = socialMediaAccounts.find(acc => 
-          acc.platform === platform && acc.username === username
-        );
+        // Get all metadata first
+        const metadata = await extractClipMetadata(url);
+        const platform = metadata.platform;
+        const clipUsername = metadata.author.username;
 
-        console.log(account);
+        console.log(metadata);
+
+        // Check if platform is allowed in campaign
+        if (!activeCampaign.allowedPlatforms.includes(platform)) {
+          errors.push(`Platform ${platform} is not allowed in this campaign: ${url}`);
+          continue;
+        }
+
+        // Find matching social media account
+        const account = socialMediaAccounts.find(acc => 
+          acc.platform === platform && acc.username === clipUsername
+        );
 
         if (!account) {
           errors.push(`Clip doesn't belong to any of your verified accounts: ${url}`);
           continue;
         }
 
-        const metadata = await extractClipMetadata(url);
+        // Check audio requirements based on platform
+        if (metadata.audioClusterId && activeCampaign.soundURL) {
+          // Filter sound URLs by platform
+          const platformSoundURLs = activeCampaign.soundURL.filter(soundUrl => {
+            if (platform === 'INSTAGRAM') {
+              return soundUrl.includes('instagram.com');
+            } else if (platform === 'TIKTOK') {
+              return soundUrl.includes('tiktok.com');
+            }
+            return false;
+          });
 
-        console.log(metadata);
-        
+          // Only validate audio if there are sound URLs for this platform
+          if (platformSoundURLs.length > 0) {
+            const hasMatchingAudio = platformSoundURLs.some(soundUrl => {
+              const matches = soundUrl.match(/\d+/);
+              return matches && matches[0] === metadata.audioClusterId.toString();
+            });
+
+            if (!hasMatchingAudio) {
+              errors.push(`Audio not allowed for this ${platform} campaign: ${url}`);
+              continue;
+            }
+          }
+        }
+
         const [clip, created] = await db.Clip.findOrCreate({
           where: {
             url,
-            socialMediaAccountId: account.id
+            socialMediaAccountId: account.id,
           },
           defaults: {
             platform,
             views: metadata.views,
-            likes: metadata.likes
+            likes: metadata.likes,
+            CampaignId: activeCampaign.id,
+            UserId: user.id,
           }
         });
+
+        console.log(created);
+        
 
         if (created) {
           results.push({
@@ -83,16 +145,3 @@ export default async function handleUpload(req, res, member, options) {
   }
 }
 
-async function sendDM(userId, messageData) {
-  try {
-    if (!client.isReady()) {
-      throw new Error('Discord client is not ready');
-    }
-
-    const user = await client.users.fetch(userId);
-    await user.send(messageData);
-    console.log(`Sent upload results DM to ${user.tag}`);
-  } catch (error) {
-    console.error('Failed to send DM:', error);
-  }
-} 

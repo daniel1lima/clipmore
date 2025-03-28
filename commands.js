@@ -107,6 +107,12 @@ const MY_ACCOUNTS_COMMAND = {
   type: 1
 };
 
+const MY_CLIPS_COMMAND = {
+  name: 'my-clips',
+  description: 'View your clips',
+  type: 1
+};
+
 const CREATE_CAMPAIGN_COMMAND = {
   name: 'create-campaign',
   description: 'Create a new campaign',
@@ -145,6 +151,18 @@ const CREATE_CAMPAIGN_COMMAND = {
     },
     {
       type: 3, // STRING type
+      name: 'sound-url',
+      description: 'Sound URL',
+      required: false
+    },
+    {
+      type: 3, // STRING type
+      name: 'allowed-platforms',
+      description: 'Allowed platforms (comma-separated)',
+      required: false
+    },
+    {
+      type: 3, // STRING type
       name: 'description',
       description: 'Description of the campaign',
       required: false
@@ -168,7 +186,8 @@ const ALL_COMMANDS = [
   UPLOAD_COMMAND,
   STATS_COMMAND,
   LEADERBOARD_COMMAND,
-  MY_ACCOUNTS_COMMAND
+  MY_ACCOUNTS_COMMAND,
+  MY_CLIPS_COMMAND
 ];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);

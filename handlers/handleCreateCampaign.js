@@ -2,7 +2,8 @@ import { InteractionResponseType, InteractionResponseFlags} from 'discord-intera
 import { SlashCommandBuilder } from '@discordjs/builders';
 import db from '../models/index.js';
 import client from '../utils/discordClient.js';
-
+import { MessageTemplates } from '../utils/messageTemplates.js';
+import { sendDM } from '../utils/discordManager.js';
 
 
 export default async function handleCreateCampaign(req, res, guild, member, options) {
@@ -19,6 +20,14 @@ export default async function handleCreateCampaign(req, res, guild, member, opti
     const serverUrl = options.find(opt => opt.name === 'server-url')?.value;
     const endDateStr = options.find(opt => opt.name === 'end-date')?.value;
     const guildId = options.find(opt => opt.name === 'guild-id')?.value;
+    const allowedPlatforms = options.find(opt => opt.name === 'allowed-platforms')?.value;
+    const soundURL = options.find(opt => opt.name === 'sound-url')?.value;
+
+    // Parse allowedPlatforms string into an array
+    const platformsArray = allowedPlatforms ? allowedPlatforms.split(',').map(p => p.trim()) : ['INSTAGRAM', 'TIKTOK', 'YOUTUBE', 'X'];
+    const soundURLArray = soundURL ? soundURL.split(',').map(p => p.trim()) : [];
+
+    console.log(platformsArray);
 
     // Send immediate response
     res.send({
@@ -47,33 +56,18 @@ export default async function handleCreateCampaign(req, res, guild, member, opti
       maxPayout,
       serverUrl,
       endDate,
+      allowedPlatforms: platformsArray,
       discordGuildId: guildId,
       status: 'DRAFT',
       totalViews: 0,
-      totalLikes: 0
+      totalLikes: 0,
+      soundURL: soundURLArray
     });
 
     // Post announcement in the specified channel
     try {
       const channel = await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID);
-      await channel.send({
-        embeds: [{
-          title: '🎉 New Campaign Created!',
-          color: 0x00ff00, // Green color
-          fields: [
-            { name: 'Campaign Name', value: name, inline: false },
-            { name: 'Rate per View/Like', value: `$${rate}`, inline: true },
-            { name: 'Maximum Payout', value: `$${maxPayout}`, inline: true },
-            { name: 'Server Link', value: serverUrl, inline: false },
-            ...(description ? [{ name: 'Description', value: description, inline: false }] : []),
-            ...(endDate ? [{ name: 'End Date', value: endDate.toLocaleDateString(), inline: true }] : [])
-          ],
-          footer: {
-            text: `Campaign ID: ${campaign.id}`
-          },
-          timestamp: new Date()
-        }]
-      });
+      await channel.send(MessageTemplates.campaignAnnouncement(campaign));
     } catch (error) {
       console.error('Error posting campaign announcement:', error);
       await sendDM(member.user.id, 'Campaign created but failed to post announcement.');
@@ -86,20 +80,6 @@ export default async function handleCreateCampaign(req, res, guild, member, opti
   } catch (error) {
     console.error('Error creating campaign:', error);
     await sendDM(member.user.id, 'There was an error creating the campaign. Please try again.');
-  }
-}
-
-async function sendDM(userId, content) {
-  try {
-    if (!client.isReady()) {
-      throw new Error('Discord client is not ready');
-    }
-
-    const user = await client.users.fetch(userId);
-    await user.send({ content });
-    console.log(`Sent campaign creation results DM to ${user.tag}`);
-  } catch (error) {
-    console.error('Failed to send DM:', error);
   }
 }
 

@@ -1,6 +1,6 @@
 import client from './discordClient.js';
 
-async function addRole(userId, guildId, roleName) {
+export async function addRole(userId, guildId, roleName, sendWelcomeMessage = true) {
   try {
     // Ensure client is ready
     if (!client.isReady()) {
@@ -24,8 +24,9 @@ async function addRole(userId, guildId, roleName) {
     await member.roles.add(role.id);
     
     // Send a styled direct message
-    member.send({
-      embeds: [{
+    if (sendWelcomeMessage) {
+      member.send({
+        embeds: [{
         title: `✨ Welcome to ${guild.name}! ✨`,
         description: `Hey ${member.user.username}, we're thrilled to have you join our community! You've been granted the **${role.name}** role.`,
         color: 0x7289DA, // Discord's signature blurple color
@@ -49,8 +50,9 @@ async function addRole(userId, guildId, roleName) {
         timestamp: new Date().toISOString()
       }]
     })
-    .then(message => console.log(`Sent welcome message to ${member.user.tag}`))
-    .catch(console.error);
+      .then(message => console.log(`Sent welcome message to ${member.user.tag}`))
+      .catch(console.error);
+    }
 
     console.log(`Added role ${roleName} to user ${userId} in guild ${guildId}`);
     return true;
@@ -60,4 +62,17 @@ async function addRole(userId, guildId, roleName) {
   }
 }
 
-export default addRole; 
+export async function sendDM(userId, messageData) {
+  try {
+    if (!client.isReady()) {
+      throw new Error('Discord client is not ready');
+    }
+
+    const user = await client.users.fetch(userId);
+    await user.send(messageData);
+    console.log(`Sent upload results DM to ${user.tag}`);
+  } catch (error) {
+    console.error('Failed to send DM:', error);
+  }
+} 
+

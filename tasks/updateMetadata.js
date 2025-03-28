@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { updateClipsMetadata } from '../utils/clipValidation.js';
+import { updateClipsMetadata } from '../utils/extractMetadata.js';
 
 // Run every 2 hours (at minute 0)
 export function scheduleMetadataUpdates() {

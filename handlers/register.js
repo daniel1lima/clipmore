@@ -1,7 +1,7 @@
 import { InteractionResponseType } from 'discord-interactions';
 import db from '../models/index.js';
 import { MessageTemplates } from '../utils/messageTemplates.js';
-import addRole from '../utils/roleManager.js';
+import { addRole } from '../utils/discordManager.js';
 
 export async function handleRegister(req, res, guild, member) {
   try {
@@ -15,6 +15,7 @@ export async function handleRegister(req, res, guild, member) {
     });
 
     if (!created && user) {
+      await addRole(member.user.id, guildId, process.env.MEMBER_ROLE_NAME, false);
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: MessageTemplates.alreadyRegistered(),

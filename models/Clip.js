@@ -30,6 +30,13 @@ export default (sequelize) => {
         key: 'id'
       }
     },
+    userId: {
+      type: DataTypes.INTEGER,
+      references: {
+        model: 'Users',
+        key: 'id'
+      }
+    },
     lastMetadataUpdate: {
       type: DataTypes.DATE,
       allowNull: true,

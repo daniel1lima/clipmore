@@ -133,11 +133,25 @@ export const MessageTemplates = {
     const successCount = results.length;
     const errorCount = errors.length;
     
+    const getPlatformEmoji = (platform) => {
+      const emojis = {
+        'YouTube': '📺',
+        'TikTok': '🎵',
+        'Instagram': '📸',
+        'Twitter': '🐦',
+        'default': '🎯'
+      };
+      return emojis[platform] || emojis.default;
+    };
     // Create success table if there are successful uploads
-    const successTable = results.length > 0 ? 
-      "| Platform | Status | URL |\n" +
-      "|----------|--------|-----|\n" +
-      results.map(({platform, url}) => `| ${platform} | ✅ Live | ${url} |`).join('\n') : '';
+    
+    const successTable = results.length > 0 
+      ? results.map(({platform, url}, index) => (
+          `• ${getPlatformEmoji(platform)} ${platform} ┊ [View Content ${index + 1}](${url})`
+        )).join('\n')
+      : '';
+
+    // Helper function to get platform-specific emojis
 
     // Format errors with more detailed bullet points
     const errorList = errors.length > 0 ?
@@ -154,11 +168,21 @@ export const MessageTemplates = {
             value: successTable,
             inline: false
           }] : []),
+          {
+            name: "",
+            value: "\n",
+            inline: false
+          },
           ...(errorList ? [{
             name: "Issues to Resolve",
             value: errorList,
             inline: false
           }] : []),
+          {
+            name: "",
+            value: "\n",
+            inline: false
+          },
           {
             name: "📱 What's Next?",
             value: "• Your content metrics are now being tracked\n• Check performance with `/stats`\n",
@@ -253,6 +277,16 @@ export const MessageTemplates = {
     content: 'There was an error creating the campaign. Please try again.'
   }),
 
+  noCampaignFound: () => ({
+    embeds: [{
+      title: "❌ No Active Campaign Found ❌",
+      description: "There is no active campaign in this server. Please contact an administrator.",
+      color: 0xFF0000,
+      timestamp: new Date().toISOString()
+    }],
+    flags: 64
+  }),
+
   campaignAnnouncementError: () => ({
     content: 'Campaign created but failed to post announcement.'
   }),
@@ -299,6 +333,32 @@ export const MessageTemplates = {
           name: "Username",
           value: `@${username}`,
           inline: true
+        }
+      ],
+      timestamp: new Date().toISOString()
+    }],
+    flags: 64
+  }),
+
+  noUserFound: () => ({
+    embeds: [{
+      title: "❌ User Not Found ❌",
+      description: "We couldn't find this user in our system. Please make sure you're registered with ClipMore.",
+      color: 0xFF0000,
+      timestamp: new Date().toISOString()
+    }],
+    flags: 64
+  }),
+
+  noClipsFound: () => ({
+    embeds: [{
+      title: "📭 No Clips Found",
+      description: "You haven't uploaded any clips yet! Use `/upload` in the `#command-center` channel to start tracking your content.",
+      color: 0xFFA500,
+      fields: [
+        {
+          name: "Getting Started",
+          value: "1. Go to `#command-center`\n2. Use `/upload`\n3. Follow the prompts to add your content"
         }
       ],
       timestamp: new Date().toISOString()

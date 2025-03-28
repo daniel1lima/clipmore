@@ -38,14 +38,22 @@ db.SocialMediaAccount.belongsTo(db.User);
 db.SocialMediaAccount.hasMany(db.Clip);
 db.Clip.belongsTo(db.SocialMediaAccount);
 
+// Add direct User-Clip association
+db.User.hasMany(db.Clip);
+db.Clip.belongsTo(db.User);
+
 db.User.hasMany(db.Payment);
 db.Payment.belongsTo(db.User);
+
+// Add Campaign-Clip association
+db.Campaign.hasMany(db.Clip);
+db.Clip.belongsTo(db.Campaign);
 
 // Test connection and sync models
 sequelize.authenticate()
   .then(() => {
     console.log('Database connection has been established successfully.');
-    return sequelize.sync();
+    return sequelize.sync({ alter: true });
   })
   .then(() => {
     console.log('Database & tables created!');

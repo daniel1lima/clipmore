@@ -16,7 +16,8 @@ import {
   handleTest,
   handleSetupRegister,
   handleMyAccounts,
-  handleCreateCampaign
+  handleCreateCampaign,
+  handleMyClips
 } from './handlers/index.js';
 import { scheduleMetadataUpdates, runMetadataUpdate } from './tasks/updateMetadata.js';
 
@@ -62,7 +63,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         return handleVerifyStatus(req, res, guild, member, options);
       
       case 'upload':
-        return handleUpload(req, res, member, options);
+        return handleUpload(req, res, member, options, guild);
       
       case 'stats':
         return handleStats(req, res, member);
@@ -79,6 +80,9 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
       case 'create-campaign':
         return handleCreateCampaign(req, res, guild, member, options);
+      
+      case 'my-clips':
+        return handleMyClips(req, res, member);
       
       default:
         console.error(`Unknown command: ${name}`);

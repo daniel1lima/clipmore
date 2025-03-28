@@ -66,9 +66,58 @@ async function verifyInstagram(username, code) {
 }
 
 function verifyTikTok(username, code) {
-  // Implement TikTok verification logic here
-  // This is a placeholder implementation
-  return true;
+  return new Promise((resolve, reject) => {
+    try {
+      const options = {
+        method: 'GET',
+        hostname: 'tiktok-api23.p.rapidapi.com',
+        port: null,
+        path: `/api/user/info?uniqueId=${encodeURIComponent(username)}`,
+        headers: {
+          'x-rapidapi-key': process.env.X_API_KEY,
+          'x-rapidapi-host': 'tiktok-api23.p.rapidapi.com'
+        }
+      };
+      
+      const req = http.request(options, (res) => {
+        const chunks = [];
+        
+        res.on('data', (chunk) => {
+          chunks.push(chunk);
+        });
+        
+        res.on('end', () => {
+          try {
+            const body = Buffer.concat(chunks);
+            const userData = JSON.parse(body.toString());
+            
+            // Check if we have valid user data and signature
+            if (userData.userInfo?.user?.signature) {
+              const bio = userData.userInfo.user.signature;
+              console.log('TikTok bio:', bio);
+              resolve(bio.includes(code));
+            } else {
+              console.error('Invalid TikTok API response structure:', userData);
+              resolve(false);
+            }
+          } catch (parseError) {
+            console.error('Error parsing TikTok response:', parseError);
+            resolve(false);
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        console.error('TikTok request error:', error);
+        resolve(false);
+      });
+
+      req.end();
+    } catch (error) {
+      console.error('TikTok verification failed:', error);
+      resolve(false);
+    }
+  });
 }
 
 function verifyYouTube(username, code) {
