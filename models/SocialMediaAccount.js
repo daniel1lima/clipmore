@@ -16,6 +16,11 @@ export default (sequelize) => {
       allowNull: false,
       unique: true
     },
+    ytChannelId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: null
+    },
     isVerified: {
       type: DataTypes.BOOLEAN,
       defaultValue: false

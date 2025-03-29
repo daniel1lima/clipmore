@@ -1,5 +1,11 @@
 import { DataTypes } from "sequelize";
 
+export const CampaignStatus = {
+  ACTIVE: "ACTIVE",
+  PAUSED: "PAUSED",
+  COMPLETED: "COMPLETED",
+};
+
 export default (sequelize) => {
   const Campaign = sequelize.define("Campaign", {
     id: {

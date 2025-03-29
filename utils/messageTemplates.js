@@ -1,3 +1,5 @@
+import { formatNumber } from './formatting.js';
+
 export const MessageTemplates = {
   // Verification status messages
   verificationSuccess: (platform, username) => ({
@@ -143,52 +145,70 @@ export const MessageTemplates = {
       };
       return emojis[platform] || emojis.default;
     };
-    // Create success table if there are successful uploads
     
+    // Create success table if there are successful uploads
     const successTable = results.length > 0 
       ? results.map(({platform, url}, index) => (
           `• ${getPlatformEmoji(platform)} ${platform} ┊ [View Content ${index + 1}](${url})`
         )).join('\n')
       : '';
 
-    // Helper function to get platform-specific emojis
-
     // Format errors with more detailed bullet points
     const errorList = errors.length > 0 ?
       errors.map(error => `❌ ${error}`).join('\n') : '';
 
+    // Prepare fields based on whether there are successful uploads
+    const fields = [];
+    
+    if (successTable) {
+      fields.push({
+        name: "Upload Status",
+        value: successTable,
+        inline: false
+      });
+      fields.push({
+        name: "",
+        value: "\n",
+        inline: false
+      });
+    }
+    
+    if (errorList) {
+      fields.push({
+        name: "Issues to Resolve",
+        value: errorList,
+        inline: false
+      });
+      fields.push({
+        name: "",
+        value: "\n",
+        inline: false
+      });
+    }
+    
+    // Only add "What's Next" section if there were successful uploads
+    if (successCount > 0) {
+      fields.push({
+        name: "📱 What's Next?",
+        value: "• Your content metrics are now being tracked\n• Check performance with `/stats`\n",
+        inline: false
+      });
+    }
+
+    // Create appropriate description based on results
+    let description;
+    if (successCount > 0) {
+      description = `${successCount} upload${successCount !== 1 ? 's' : ''} completed${errorCount ? ` • ${errorCount} need${errorCount === 1 ? 's' : ''} attention` : '!'}\n\n🔍 We're now tracking your content performance across platforms. Use \`/stats\` to check your metrics anytime!`;
+    } else {
+      description = `No uploads were successful. ${errorCount} error${errorCount !== 1 ? 's' : ''} found.`;
+    }
+
     return {
       embeds: [{
         title: "📊 Content Upload Summary 📊",
-        description: `${successCount} upload${successCount !== 1 ? 's' : ''} completed${errorCount ? ` • ${errorCount} need${errorCount === 1 ? 's' : ''} attention` : '!'}\n\n🔍 We're now tracking your content performance across platforms. Use \`/stats\` to check your metrics anytime!`,
+        description: description,
         color: errors.length === 0 ? 0x00FF00 : (results.length > 0 ? 0xFFA500 : 0xFF0000),
-        fields: [
-          ...(successTable ? [{
-            name: "Upload Status",
-            value: successTable,
-            inline: false
-          }] : []),
-          {
-            name: "",
-            value: "\n",
-            inline: false
-          },
-          ...(errorList ? [{
-            name: "Issues to Resolve",
-            value: errorList,
-            inline: false
-          }] : []),
-          {
-            name: "",
-            value: "\n",
-            inline: false
-          },
-          {
-            name: "📱 What's Next?",
-            value: "• Your content metrics are now being tracked\n• Check performance with `/stats`\n",
-            inline: false
-          }
-        ],
+        fields: fields,
         timestamp: new Date().toISOString()
       }],
       flags: 64
@@ -223,7 +243,7 @@ export const MessageTemplates = {
     }
   }),
 
-  campaignAnnouncement: (campaign) => ({
+  campaignAnnouncement: (campaign, iconURL) => ({
     embeds: [{
       title: '🌟 NEW OPPORTUNITY ALERT 🌟',
       description: '```diff\n+ Limited Time Clipping Campaign!\n```',
@@ -251,7 +271,7 @@ export const MessageTemplates = {
         }] : [])
       ],
       thumbnail: {
-        url: 'https://drive.usercontent.google.com/download?id=1Aq7kl39paKgFaxqiNAjRcRPw7QoQfGSM'
+        url: iconURL || 'https://drive.usercontent.google.com/download?id=1Aq7kl39paKgFaxqiNAjRcRPw7QoQfGSM'
       },
       footer: {
         text: `Campaign Reference: ${campaign.id} • ClipMore`,
@@ -280,7 +300,17 @@ export const MessageTemplates = {
   noCampaignFound: () => ({
     embeds: [{
       title: "❌ No Active Campaign Found ❌",
-      description: "There is no active campaign in this server. Please contact an administrator.",
+      description: "There is no active campaign in this server. Please contact an administrator if you think this is an error.",
+      color: 0xFF0000,
+      timestamp: new Date().toISOString()
+    }],
+    flags: 64
+  }),
+
+  campaignNotActive: () => ({
+    embeds: [{
+      title: "❌ Campaign Not Active ❌",
+      description: "The campaign is not active. Please contact an administrator if you think this is an error.",
       color: 0xFF0000,
       timestamp: new Date().toISOString()
     }],
@@ -364,5 +394,69 @@ export const MessageTemplates = {
       timestamp: new Date().toISOString()
     }],
     flags: 64
-  })
+  }),
+
+  statsPanel: (stats, totalStats, activeCampaign) => {
+    const platformEmojis = {
+      'INSTAGRAM': '📸',
+      'TIKTOK': '🎵',
+      'YOUTUBE': '📺',
+      'X': '🐦'
+    };
+
+    return {
+      embeds: [
+        // Main embed
+        {
+          title: "📊 Your Content Statistics",
+          color: 0x2b2d31, // Discord dark theme color
+          description: "Overview of your performance across all platforms",
+          timestamp: new Date().toISOString(),
+          footer: {
+            text: 'ClipMore Stats • Updated'
+          }
+        },
+        // Platform Stats embed
+        {
+          title: "🎯 Platform Breakdown",
+          color: 0x5865f2, // Discord blurple
+          fields: stats.map(stat => ({
+            name: `${platformEmojis[stat.platform] || '🎯'} ${stat.platform}`,
+            value: [
+              `**Username:** @${stat.username}`,
+              `**Clips:** ${stat.clipCount}`,
+              `**Views:** ${formatNumber(stat.totalViews)}`,
+              `**Likes:** ${formatNumber(stat.totalLikes)}`
+            ].join('\n'),
+            inline: true
+          })),
+        },
+        // Overall Stats embed
+        {
+          title: "📈 Overall Performance",
+          color: 0x57f287, // Discord green
+          description: [
+            `**Total Clips:** ${totalStats.clipCount}`,
+            `**Total Views:** ${formatNumber(totalStats.totalViews)}`,
+            `**Total Likes:** ${formatNumber(totalStats.totalLikes)}`
+          ].join('\n')
+        },
+        // Earnings embed
+        {
+          title: "💰 Earnings Information",
+          color: 0xfee75c, // Discord yellow
+          description: activeCampaign
+            ? [
+                `**Estimated Earnings:** $${(totalStats.totalViews * activeCampaign.rate).toFixed(2)}`,
+                `**Current Rate:** $${activeCampaign.rate} per view`,
+                activeCampaign.maxPayout ? `**Maximum Payout:** $${activeCampaign.maxPayout}` : '',
+                '',
+                `*Campaign: ${activeCampaign.name}*`
+              ].filter(Boolean).join('\n')
+            : '*No active campaign found*'
+        }
+      ],
+      flags: 64 // Ephemeral message
+    };
+  }
 }; 

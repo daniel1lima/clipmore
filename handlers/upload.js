@@ -3,7 +3,7 @@ import db from '../models/index.js';
 import { extractClipMetadata } from '../utils/extractMetadata.js';
 import { MessageTemplates } from '../utils/messageTemplates.js';
 import { sendDM } from '../utils/discordManager.js';
-
+import { CampaignStatus } from '../models/Campaign.js';
 
 export default async function handleUpload(req, res, member, options, guild) {
   const urlsString = options.find(opt => opt.name === 'urls').value;
@@ -14,9 +14,6 @@ export default async function handleUpload(req, res, member, options, guild) {
     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
     data: MessageTemplates.uploadProcessing(urls.length)
   });
-
-  console.log(member.user.id);
-  console.log(guild);
 
   try {
     const user = await db.User.findOne({
@@ -33,13 +30,16 @@ export default async function handleUpload(req, res, member, options, guild) {
     const activeCampaign = await db.Campaign.findOne({
       where: {
         discordGuildId: guild.id,
-        status: 'DRAFT'
-        // TODO: CHANGE THIS
       }
     });
 
     if (!activeCampaign) {
       sendDM(member.user.id, MessageTemplates.noCampaignFound());
+      return;
+    }
+
+    if (activeCampaign.status !== CampaignStatus.ACTIVE) {
+      sendDM(member.user.id, MessageTemplates.campaignNotActive());
       return;
     }
 
@@ -58,11 +58,12 @@ export default async function handleUpload(req, res, member, options, guild) {
     for (const url of urls) {
       try {
         // Get all metadata first
+        console.log(url);
         const metadata = await extractClipMetadata(url);
         const platform = metadata.platform;
         const clipUsername = metadata.author.username;
 
-        console.log(metadata);
+        // console.log(metadata);
 
         // Check if platform is allowed in campaign
         if (!activeCampaign.allowedPlatforms.includes(platform)) {
@@ -71,9 +72,14 @@ export default async function handleUpload(req, res, member, options, guild) {
         }
 
         // Find matching social media account
-        const account = socialMediaAccounts.find(acc => 
-          acc.platform === platform && acc.username === clipUsername
-        );
+        const account = socialMediaAccounts.find(acc => {
+          if (platform === 'YOUTUBE') {
+            // For YouTube, compare channel IDs
+            return acc.platform === platform && acc.ytChannelId === metadata.author.id;
+          }
+          // For other platforms, compare usernames
+          return acc.platform === platform && acc.username === clipUsername;
+        });
 
         if (!account) {
           errors.push(`Clip doesn't belong to any of your verified accounts: ${url}`);
@@ -119,8 +125,6 @@ export default async function handleUpload(req, res, member, options, guild) {
             UserId: user.id,
           }
         });
-
-        console.log(created);
         
 
         if (created) {

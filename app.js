@@ -17,7 +17,14 @@ import {
   handleSetupRegister,
   handleMyAccounts,
   handleCreateCampaign,
-  handleMyClips
+  handleMyClips,
+  handleRemoveAccount,
+  handleRemoveClip,
+  handleAddPaypal,
+  handlePauseCampaign,
+  handleEndCampaign,
+  handleStartCampaign,
+  handleUpdateCampaign
 } from './handlers/index.js';
 import { scheduleMetadataUpdates, runMetadataUpdate } from './tasks/updateMetadata.js';
 
@@ -31,6 +38,17 @@ const PORT = process.env.PORT || 3000;
  */
 app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
   const { type, data, member, guild } = req.body;
+  
+  // Silently ignore DMs by returning early if there's no guild
+  if (!guild) {
+    return res.send({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: 'Commands can only be used in a server',
+        flags: 64
+      }
+    });
+  }
 
   if (type === InteractionType.PING) {
     return res.send({ type: InteractionResponseType.PONG });
@@ -83,6 +101,27 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
       
       case 'my-clips':
         return handleMyClips(req, res, member);
+      
+      case 'remove-account':
+        return handleRemoveAccount(req, res, member, options);
+      
+      case 'remove-clip':
+        return handleRemoveClip(req, res, member, options);
+      
+      case 'add-paypal':
+        return handleAddPaypal(req, res, member, options);
+      
+      case 'pause-campaign':
+        return handlePauseCampaign(req, res, guild, member, options);
+      
+      case 'end-campaign':
+        return handleEndCampaign(req, res, guild, member, options);
+      
+      case 'start-campaign':
+        return handleStartCampaign(req, res, guild, member, options);
+      
+      case 'update-campaign':
+        return handleUpdateCampaign(req, res, guild, member, options);
       
       default:
         console.error(`Unknown command: ${name}`);

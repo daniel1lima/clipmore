@@ -27,6 +27,8 @@ export default async function handleCreateCampaign(req, res, guild, member, opti
     const platformsArray = allowedPlatforms ? allowedPlatforms.split(',').map(p => p.trim()) : ['INSTAGRAM', 'TIKTOK', 'YOUTUBE', 'X'];
     const soundURLArray = soundURL ? soundURL.split(',').map(p => p.trim()) : [];
 
+    const guild = await client.guilds.fetch(guildId);
+
     console.log(platformsArray);
 
     // Send immediate response
@@ -67,7 +69,7 @@ export default async function handleCreateCampaign(req, res, guild, member, opti
     // Post announcement in the specified channel
     try {
       const channel = await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID);
-      await channel.send(MessageTemplates.campaignAnnouncement(campaign));
+      await channel.send(MessageTemplates.campaignAnnouncement(campaign, guild.iconURL()));
     } catch (error) {
       console.error('Error posting campaign announcement:', error);
       await sendDM(member.user.id, 'Campaign created but failed to post announcement.');

@@ -45,12 +45,16 @@ export default async function handleVerifyStatus(req, res, guild, member, option
     });
 
     // Then attempt verification (this happens after we've already sent the response)
-    const isVerified = await verifyPlatformAccount(platform, username, account.verificationCode);
-
-    console.log("isVerified", isVerified);
+    const verificationResult = await verifyPlatformAccount(platform, username, account.verificationCode);
     
-    if (isVerified) {
-      await account.update({ isVerified: true });
+    if (verificationResult.isVerified) {
+      // Update account with verification status and YouTube channel ID if present
+      const updateData = { isVerified: true };
+      if (platform === 'YOUTUBE' && verificationResult.ytChannelId) {
+        updateData.ytChannelId = verificationResult.ytChannelId;
+      }
+      
+      await account.update(updateData);
       await basicUser.update({ isVerified: true });
 
       await addRole(member.user.id, guildId, process.env[`${platform.toUpperCase()}_ROLE_NAME`], false);

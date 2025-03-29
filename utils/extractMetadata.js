@@ -8,21 +8,52 @@ export const PLATFORM_PATTERNS = {
   },
   TIKTOK: {
     VIDEO: /^https?:\/\/(?:www\.)?tiktok\.com\/@([a-zA-Z0-9._]+)\/video\/(\d+)/,
-    PHOTO: /^https?:\/\/(?:www\.)?tiktok\.com\/@([a-zA-Z0-9._]+)\/photo\/(\d+)/
+    PHOTO: /^https?:\/\/(?:www\.)?tiktok\.com\/@([a-zA-Z0-9._]+)\/photo\/(\d+)/,
+    SHORT: /^https?:\/\/(?:vm\.)?tiktok\.com\/\w+/
   },
   YOUTUBE: {
     SHORTS: /^https?:\/\/(?:www\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/,
     VIDEO: /^https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/
+  },
+  X: {
+    POST: /^https?:\/\/(?:www\.)?(?:twitter|x)\.com\/([a-zA-Z0-9_]+)\/status\/(\d+)/
   }
 };
 
+// Add this helper function
+async function expandShortUrl(shortUrl) {
+  return new Promise((resolve, reject) => {
+    https.get(shortUrl, {
+      followRedirect: true,
+      maxRedirects: 5
+    }, (response) => {
+      const finalUrl = response.req.res.responseUrl || response.headers.location || shortUrl;
+      console.log(finalUrl);
+      resolve(finalUrl);
+    }).on('error', (error) => {
+      reject(new Error(`Failed to expand shortened URL: ${error.message}`));
+    });
+  });
+}
+
 export async function extractClipMetadata(url, bypass = false) {
   try {
-    const urlObj = new URL(url);
+
+    let processedUrl = url;
+    let urlObj = new URL(url);
+
+    // Only expand URL if it's a shortened TikTok URL
+    if (PLATFORM_PATTERNS.TIKTOK.SHORT.test(url)) {
+
+      console.log(url);
+      processedUrl = await expandShortUrl(url);
+      urlObj = new URL(processedUrl);
+    }
+
     
     // Check if clip already exists in database
     const existingClip = await db.Clip.findOne({
-      where: { url }
+      where: { url: processedUrl }
     });
 
     if (existingClip && !bypass) {
@@ -31,17 +62,21 @@ export async function extractClipMetadata(url, bypass = false) {
 
     // Instagram metadata extraction
     if (urlObj.hostname.includes('instagram.com')) {
-      return await extractInstagramMetadata(url);
+      return await extractInstagramMetadata(processedUrl);
     }
     
     // TikTok metadata extraction
     if (urlObj.hostname.includes('tiktok.com')) {
-      return await extractTikTokMetadata(url);
+      return await extractTikTokMetadata(processedUrl);
     }
     
     // YouTube metadata extraction
     if (urlObj.hostname.includes('youtube.com')) {
-      return await extractYouTubeMetadata(url);
+      return await extractYouTubeMetadata(processedUrl);
+    }
+
+    if (urlObj.hostname.includes('x.com')) {
+      return await extractXMetadata(processedUrl);
     }
     
     throw new Error('Unsupported platform');
@@ -176,17 +211,122 @@ async function extractYouTubeMetadata(url) {
     throw new Error('URL must be a YouTube video or short');
   }
 
-  // Basic metadata since we're not using YouTube API
-  return {
-    views: 0,
-    likes: 0,
-    platform: 'YOUTUBE',
-    duration: 0,
-    author: {
-      username: 'unknown', // Would need YouTube API to get this
-      nickname: 'unknown'
+  const videoId = url.match(PLATFORM_PATTERNS.YOUTUBE.SHORTS)?.[1] || 
+                  url.match(PLATFORM_PATTERNS.YOUTUBE.VIDEO)?.[1];
+
+  if (!videoId) {
+    throw new Error('Could not extract video ID from URL');
+  }
+
+  const options = {
+    method: 'GET',
+    hostname: 'youtube138.p.rapidapi.com',
+    path: `/video/details?id=${videoId}&hl=en&gl=US`,
+    headers: {
+      'x-rapidapi-key': process.env.X_API_KEY,
+      'x-rapidapi-host': 'youtube138.p.rapidapi.com'
     }
   };
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(Buffer.concat(chunks).toString());
+
+          console.log(data);
+          
+          if (!data.title) {
+            throw new Error('Could not extract metadata from YouTube response');
+          }
+
+          resolve({
+            views: parseInt(data.viewCount) || 0,
+            likes: parseInt(data.likeCount) || 0,
+            platform: 'YOUTUBE',
+            duration: parseInt(data.lengthSeconds) || 0,
+            author: {
+              id: data.author.channelId,
+              username: data.author.channelId,
+              nickname: data.author.channelId
+            }
+          });
+        } catch (error) {
+          reject(new Error(`Failed to parse YouTube API response: ${error.message}`));
+        }
+      });
+    });
+
+    req.on('error', (error) => {
+      reject(new Error(`YouTube API request failed: ${error.message}`));
+    });
+
+    req.end();
+  });
+}
+
+async function extractXMetadata(url) {
+  if (!PLATFORM_PATTERNS.X.POST.test(url)) {
+    throw new Error('URL must be an X post');
+  }
+
+  const match = url.match(PLATFORM_PATTERNS.X.POST);
+  if (!match || !match[2]) {
+    throw new Error('Invalid X post URL');
+  }
+
+  const postId = match[2];
+
+  const options = {
+    method: 'GET',
+    hostname: 'real-time-x-com-data-scraper.p.rapidapi.com',
+    path: `/v2/TweetDetail/?id=${postId}`,
+    headers: {
+      'x-rapidapi-key': process.env.X_API_KEY,
+      'x-rapidapi-host': 'real-time-x-com-data-scraper.p.rapidapi.com'
+    }
+  };
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(Buffer.concat(chunks).toString());
+          
+          if (!data.data?.threaded_conversation_with_injections_v2?.instructions?.[0]?.entries?.[0]?.content?.itemContent?.tweet_results?.result) {
+            throw new Error('Could not extract metadata from X response');
+          }
+
+          const tweet = data.data.threaded_conversation_with_injections_v2.instructions[0].entries[0]
+            .content.itemContent.tweet_results.result;
+
+          resolve({
+            views: tweet.views?.count || 0,
+            likes: parseInt(tweet.legacy?.favorite_count) || 0,
+            platform: 'X',
+            duration: 0,
+            author: {
+              id: tweet.core.user_results.result.rest_id,
+              username: tweet.core.user_results.result.legacy.screen_name,
+              nickname: tweet.core.user_results.result.legacy.name
+            }
+          });
+        } catch (error) {
+          reject(new Error(`Failed to parse X API response: ${error.message}`));
+        }
+      });
+    });
+
+    req.on('error', (error) => {
+      reject(new Error(`X API request failed: ${error.message}`));
+    });
+
+    req.end();
+  });
 }
 
 export async function updateClipsMetadata() {

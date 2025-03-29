@@ -10,10 +10,6 @@ export async function handleMyAccounts(req, res, member) {
       where: { discordId }
     });
 
-    const socialMediaAccounts = await db.SocialMediaAccount.findAll({
-      where: { userId: user.id }
-    });
-
     if (!user) {
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -23,6 +19,10 @@ export async function handleMyAccounts(req, res, member) {
         }
       });
     }
+
+    const socialMediaAccounts = await db.SocialMediaAccount.findAll({
+      where: { userId: user.id }
+    });
 
     // Group accounts by platform
     const accounts = socialMediaAccounts || [];
@@ -50,17 +50,32 @@ export async function handleMyAccounts(req, res, member) {
       return `${emoji} **${account.platform}**\n• Username: \`${account.username}\`\n• Status: ${verificationStatus}`;
     }).join('\n\n');
 
+    // Format payment information
+    const paymentInfo = user.paypalEmail 
+      ? `**PayPal Email:** ||${maskEmail(user.paypalEmail)}||`
+      : '❌ No PayPal email set. Use `/add-paypal` to set up payments.';
+
     const response = {
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
-        embeds: [{
-          title: '🔗 Your Linked Social Media Accounts',
-          description: accountsList,
-          color: 0x3498db,
-          footer: {
-            text: 'Use /add-account in the #command-center channel to link more accounts'
+        embeds: [
+          {
+            title: '🔗 Your Linked Social Media Accounts',
+            description: accountsList,
+            color: 0x3498db,
+            footer: {
+              text: 'Use /add-account in the #command-center channel to link more accounts'
+            }
+          },
+          {
+            title: '💰 Payment Information',
+            description: paymentInfo,
+            color: 0x2ecc71, // Green color for payment section
+            footer: {
+              text: 'Your PayPal email is hidden for security. Click to reveal.'
+            }
           }
-        }],
+        ],
         flags: 64
       }
     };
@@ -76,6 +91,14 @@ export async function handleMyAccounts(req, res, member) {
       }
     });
   }
+}
+
+// Helper function to mask email
+function maskEmail(email) {
+  if (!email) return '';
+  const [username, domain] = email.split('@');
+  const maskedUsername = username.charAt(0) + '*'.repeat(username.length - 2) + username.charAt(username.length - 1);
+  return `${maskedUsername}@${domain}`;
 }
 
 export default handleMyAccounts;

@@ -16,9 +16,8 @@ export default async function handleMyClips(req, res, member) {
 
   const clips = await db.Clip.findAll({
     where: { UserId: user.id },
+    order: [['createdAt', 'DESC']] // Show newest clips first
   });
-
-  console.log(clips.map(clip => clip.toJSON()));
 
   if (clips.length === 0) {
     return res.send({
@@ -36,33 +35,67 @@ export default async function handleMyClips(req, res, member) {
     return acc;
   }, {});
 
-  // Helper function to get platform-specific colors
-  function getPlatformColor(platform) {
-    const colors = {
-      'Twitch': 0x9146FF,
-      'YouTube': 0xFF0000,
-      'TikTok': 0x000000,
-      'Instagram': 0x000000,
-      'default': 0x5865F2
-    };
-    return colors[platform] || colors.default;
-  }
+  // Platform-specific styling
+  const platformStyles = {
+    'INSTAGRAM': {
+      color: 0xE1306C,
+      emoji: '📸',
+      name: 'Instagram'
+    },
+    'YOUTUBE': {
+      color: 0xFF0000,
+      emoji: '📺',
+      name: 'YouTube'
+    },
+    'TIKTOK': {
+      color: 0x000000,
+      emoji: '🎵',
+      name: 'TikTok'
+    },
+    'X': {
+      color: 0x1DA1F2,
+      emoji: '🐦',
+      name: 'X'
+    }
+  };
 
+  const embeds = [
+    // Main header embed
+    {
+      title: "📎 Your Content Collection",
+      description: `Total Clips: ${clips.length}\nView your uploaded content across all platforms below`,
+      color: 0x2b2d31, // Discord dark theme color
+      timestamp: new Date().toISOString(),
+      footer: {
+        text: 'ClipMore Content Library • Updated'
+      }
+    },
+    // Platform-specific embeds
+    ...Object.entries(clipsByPlatform).map(([platform, platformClips]) => {
+      const style = platformStyles[platform] || { color: 0x5865F2, emoji: '🎯', name: platform };
+      
+      // Calculate platform stats
+      const totalViews = platformClips.reduce((sum, clip) => sum + clip.views, 0);
+      const totalLikes = platformClips.reduce((sum, clip) => sum + clip.likes, 0);
 
-  const embeds = Object.entries(clipsByPlatform).map(([platform, clips]) => {
-    return {
-      title: `${platform} Clips Collection`,
-      description: clips.map((clip, index) => (
-        `**${index + 1}.** [Watch Clip](${clip.url}) ${clip.title ? `• *${clip.title}*` : ''}`
-      )).join('\n\n'),
-      color: getPlatformColor(platform),
-      timestamp: new Date().toISOString()
-    };
-  });
-
-  
-
-  
+      return {
+        title: `${style.emoji} ${style.name} Content`,
+        description: [
+          `**Platform Stats:**`,
+          `• Total Clips: ${platformClips.length}`,
+          `• Total Views: ${totalViews.toLocaleString()}`,
+          `• Total Likes: ${totalLikes.toLocaleString()}`,
+          '\n**Your Clips:**',
+          ...platformClips.map((clip, index) => (
+            `\`${(index + 1).toString().padStart(2, '0')}\` [${clip.views.toLocaleString()} views](${clip.url})` +
+            `${clip.title ? ` • *${clip.title}*` : ''}`
+          ))
+        ].join('\n'),
+        color: style.color,
+        timestamp: new Date().toISOString()
+      };
+    })
+  ];
 
   return res.send({
     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
