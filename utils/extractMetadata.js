@@ -1,5 +1,7 @@
 import https from 'https';
 import db from '../models/index.js';
+import { MessageTemplates } from './messageTemplates.js';
+import { sendDM } from './discordManager.js';
 
 export const PLATFORM_PATTERNS = {
   INSTAGRAM: {
@@ -331,45 +333,146 @@ async function extractXMetadata(url) {
 
 export async function updateClipsMetadata() {
   try {
-    const clips = await db.Clip.findAll();
-    console.log(`Starting metadata update for ${clips.length} clips`);
-
+    const campaignClips = new Map();
     const results = {
       success: 0,
       failed: 0,
-      errors: []
+      errors: [],
+      viewUpdates: [] // Track view changes
     };
+
+    const clips = await db.Clip.findAll();
+    console.log(`\n🔄 Starting metadata update for ${clips.length} clips\n${'-'.repeat(50)}`);
 
     for (const clip of clips) {
       try {
         await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limiting
+        
+        // Store old views for comparison
+        const oldViews = clip.views;
         const metadata = await extractClipMetadata(clip.url, true);
         
+        // Update clip metadata
         await clip.update({
           views: metadata.views,
           likes: metadata.likes,
           lastMetadataUpdate: new Date()
         });
 
+        // Log view changes
+        const viewDiff = metadata.views - oldViews;
+        const viewChange = viewDiff >= 0 ? `+${viewDiff}` : viewDiff;
+        
+        console.log(
+          `📊 Clip Update:\n` +
+          `   URL: ${clip.url}\n` +
+          `   Views: ${oldViews.toLocaleString()} → ${metadata.views.toLocaleString()} (${viewChange})\n` +
+          `   Likes: ${metadata.likes.toLocaleString()}\n` +
+          `   Campaign ID: ${clip.CampaignId || 'None'}\n` +
+          `${'-'.repeat(50)}`
+        );
+
+        results.viewUpdates.push({
+          url: clip.url,
+          oldViews,
+          newViews: metadata.views,
+          change: viewDiff,
+          campaignId: clip.CampaignId
+        });
+
+        // Group clips by campaign
+        if (clip.CampaignId) {
+          if (!campaignClips.has(clip.CampaignId)) {
+            campaignClips.set(clip.CampaignId, []);
+          }
+          campaignClips.get(clip.CampaignId).push(clip);
+        }
+
         results.success++;
-        console.log(`Updated metadata for clip: ${clip.url}`);
       } catch (error) {
         results.failed++;
         results.errors.push({
           url: clip.url,
           error: error.message
         });
-        console.error(`Failed to update metadata for ${clip.url}:`, error.message);
+        console.error(
+          `❌ Error updating clip:\n` +
+          `   URL: ${clip.url}\n` +
+          `   Error: ${error.message}\n` +
+          `${'-'.repeat(50)}`
+        );
       }
     }
 
-    console.log('Metadata update complete:', {
-      totalProcessed: clips.length,
-      successful: results.success,
-      failed: results.failed
-    });
+    // Campaign updates with detailed logging
+    console.log('\n📈 Campaign Updates Summary:\n' + '-'.repeat(50));
+    
+    for (const [campaignId, clips] of campaignClips.entries()) {
+      try {
+        const campaign = await db.Campaign.findByPk(campaignId);
+        if (!campaign) {
+          console.log(`⚠️ Campaign ${campaignId} not found`);
+          continue;
+        }
 
-    return results;
+        const oldTotalViews = campaign.totalViews;
+        const newTotalViews = clips.reduce((sum, clip) => sum + clip.views, 0);
+        const viewDiff = newTotalViews - oldTotalViews;
+        const potentialEarnings = newTotalViews * campaign.rate;
+
+        console.log(
+          `Campaign ID: ${campaignId}\n` +
+          `Name: ${campaign.name}\n` +
+          `Status: ${campaign.status}\n` +
+          `Total Views: ${oldTotalViews.toLocaleString()} → ${newTotalViews.toLocaleString()} (${viewDiff >= 0 ? '+' : ''}${viewDiff.toLocaleString()})\n` +
+          `Earnings: $${potentialEarnings.toFixed(2)} / $${campaign.maxPayout}\n` +
+          `${'-'.repeat(50)}`
+        );
+
+        if (campaign.status === 'ACTIVE') {
+          await campaign.update({
+            totalViews: newTotalViews
+          });
+
+          if (campaign.maxPayout && potentialEarnings >= campaign.maxPayout - 100) {
+            console.log(
+              `🚨 Campaign ${campaignId} approaching max payout - Setting to PAUSED\n` +
+              `   Current Earnings: $${potentialEarnings.toFixed(2)}\n` +
+              `   Max Payout: $${campaign.maxPayout}\n` +
+              `${'-'.repeat(50)}`
+            );
+            
+            await campaign.update({
+              status: 'PAUSED',
+              updatedAt: new Date()
+            });
+          }
+        }
+      } catch (error) {
+        console.error(
+          `❌ Error updating campaign ${campaignId}:\n` +
+          `   Error: ${error.message}\n` +
+          `${'-'.repeat(50)}`
+        );
+      }
+    }
+
+    // Final summary
+    console.log('\n📊 Update Summary:\n' + '-'.repeat(50));
+    console.log(`Total Clips Processed: ${clips.length}`);
+    console.log(`Successful Updates: ${results.success}`);
+    console.log(`Failed Updates: ${results.failed}`);
+    console.log(`Campaigns Updated: ${campaignClips.size}`);
+    console.log('-'.repeat(50) + '\n');
+
+    return {
+      ...results,
+      campaignsUpdated: Array.from(campaignClips.entries()).map(([id, clips]) => ({
+        campaignId: id,
+        totalViews: clips.reduce((sum, clip) => sum + clip.views, 0)
+      })),
+      viewUpdates: results.viewUpdates
+    };
   } catch (error) {
     console.error('Failed to update clips metadata:', error);
     throw error;

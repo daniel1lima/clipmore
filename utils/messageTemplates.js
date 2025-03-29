@@ -458,5 +458,44 @@ export const MessageTemplates = {
       ],
       flags: 64 // Ephemeral message
     };
-  }
+  },
+
+  campaignMaxPayoutReached: (campaign) => ({
+    embeds: [{
+      title: "🚨 Campaign Payout Limit Approaching 🚨",
+      description: "```diff\n- Campaign Automatically Paused\n```",
+      color: 0xFF0000, // Red color for urgency
+      fields: [
+        {
+          name: "📢 Campaign Details",
+          value: [
+            `**Name:** ${campaign.name}`,
+            `**ID:** ${campaign.id}`,
+            `**Total Views:** ${formatNumber(campaign.totalViews)}`,
+            `**Rate:** $${campaign.rate} per view`,
+            `**Current Earnings:** $${(campaign.totalViews * campaign.rate).toFixed(2)}`,
+            `**Max Payout:** $${campaign.maxPayout}`
+          ].join('\n'),
+          inline: false
+        },
+        {
+          name: "ℹ️ Status Update",
+          value: [
+            "The campaign has been automatically paused as it's approaching the maximum payout limit.",
+            "",
+            "**Actions Required:**",
+            "• Review current engagement metrics",
+            "• Adjust campaign settings if needed",
+            "• Contact support for assistance"
+          ].join('\n'),
+          inline: false
+        }
+      ],
+      footer: {
+        text: "ClipMore Campaign Alert • Auto-Paused"
+      },
+      timestamp: new Date().toISOString()
+    }],
+    flags: 64
+  }),
 }; 

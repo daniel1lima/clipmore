@@ -135,7 +135,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
 // Start the cron job
 scheduleMetadataUpdates();
-// runMetadataUpdate()
+runMetadataUpdate()
 
 app.listen(PORT, () => {
   console.log('Listening on port', PORT);
