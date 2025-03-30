@@ -30,7 +30,7 @@ export default async function handleAddAccount(req, res, member, options) {
     });
 
     if (existingAccount) {
-      if (existingAccount.userId === user.id) {
+      if (existingAccount.UserId === user.id) {
         return res.send({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: MessageTemplates.accountAlreadyRegistered(platform, username)
@@ -46,7 +46,7 @@ export default async function handleAddAccount(req, res, member, options) {
     const verificationCode = crypto.randomBytes(4).toString('hex');
     
     const account = await db.SocialMediaAccount.create({
-      userId: user.id,
+      UserId: user.id,
       platform,
       username,
       verificationCode,

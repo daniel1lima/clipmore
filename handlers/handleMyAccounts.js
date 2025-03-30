@@ -21,7 +21,7 @@ export async function handleMyAccounts(req, res, member) {
     }
 
     const socialMediaAccounts = await db.SocialMediaAccount.findAll({
-      where: { userId: user.id }
+      where: { UserId: user.id }
     });
 
     // Group accounts by platform

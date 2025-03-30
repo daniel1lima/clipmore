@@ -26,7 +26,7 @@ export default async function handleRemoveAccount(req, res, member, options) {
       where: {
         platform,
         username,
-        userId: user.id // This should match the foreign key in your database
+        UserId: user.id // This should match the foreign key in your database
       }
     });
 

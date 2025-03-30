@@ -20,18 +20,19 @@ router.get('/', async (req, res) => {
     // Get user IDs for these clips
     const userIds = clips.map(clip => clip.UserId);
 
-    // Fetch social media accounts for these users
-    const socialMediaAccounts = await db.SocialMediaAccount.findAll({
-      where: { userId: userIds }
+    // Fetch users with discordId
+    const users = await db.User.findAll({
+      where: { id: userIds },
+      attributes: ['id', 'discordId']
     });
 
     // Create a map for quick lookups
-    const socialMediaMap = new Map(socialMediaAccounts.map(account => [account.userId, account]));
+    const usersMap = new Map(users.map(user => [user.id, user]));
 
     // Combine the data
     const clipsWithData = clips.map(clip => ({
       ...clip.toJSON(),
-      user: socialMediaMap.get(clip.UserId)
+      user: usersMap.get(clip.UserId)
     }));
 
     // Fetch active campaigns
@@ -122,7 +123,7 @@ router.post('/moderation/:clipId', async (req, res) => {
       throw new Error('Clip not found');
     }
 
-    const user = await db.User.findByPk(clip.userId);
+    const user = await db.User.findByPk(clip.UserId);
 
     // Update clip moderation status
     await db.ClipModeration.update({
@@ -168,12 +169,13 @@ router.get('/clips', async (req, res) => {
     });
 
     // Get users and campaigns for these clips
-    const userIds = clips.map(clip => clip.userId);
-    const campaignIds = clips.map(clip => clip.campaignId);
+    const userIds = clips.map(clip => clip.UserId);
+    const campaignIds = clips.map(clip => clip.CampaignId);
 
     const [users, campaigns] = await Promise.all([
       db.User.findAll({
-        where: { id: userIds }
+        where: { id: userIds },
+        attributes: ['id', 'discordId']
       }),
       db.Campaign.findAll({
         where: { id: campaignIds }
@@ -186,8 +188,8 @@ router.get('/clips', async (req, res) => {
     // Combine the data
     const clipsWithData = clips.map(clip => ({
       ...clip.toJSON(),
-      user: usersMap.get(clip.userId),
-      campaign: campaignsMap.get(clip.campaignId)
+      user: usersMap.get(clip.UserId),
+      campaign: campaignsMap.get(clip.CampaignId)
     }));
 
     res.render('admin/clips', {
@@ -200,6 +202,18 @@ router.get('/clips', async (req, res) => {
     res.status(500).render('error', { error });
   }
 });
+
+// ... existing code ...
+router.delete('/clips/:clipId', async (req, res) => {
+    const { clipId } = req.params;
+    try {
+      await db.Clip.destroy({ where: { id: clipId } });
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete clip error:', error);
+      res.status(500).json({ error: 'Failed to delete clip' });
+    }
+  });
 
 router.get('/campaigns', async (req, res) => {
   try {

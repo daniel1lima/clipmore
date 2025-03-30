@@ -1,96 +1,150 @@
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <title>Admin Dashboard</title>
     <!-- Add Bootstrap CSS for styling -->
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
     <style>
-        body { padding: 20px; font-family: sans-serif; }
-        .table-hover tbody tr:hover { background-color: #f5f5f5; }
-        .log-details { display: none; }
+      body {
+        padding: 20px;
+        font-family: sans-serif;
+        background: #282525;
+      }
+      .table-hover tbody tr:hover {
+        background-color: #f5f5f5;
+      }
+      .log-details {
+        display: none;
+        background-color: #444;
+        color: #fff;
+      }
+      .table {
+        color: #ead7d5;
+        background: #6e6868;
+      }
+      h1 {
+        color: #e74c3c;
+        margin-top: 0;
+      }
+      p {
+        color: #ead7d5;
+        margin-top: 0;
+      }
+      .table-hover tbody tr:hover {
+        background-color: #f5f5f5;
+      }
+      h2 {
+        color: #ead7d5;
+        margin-top: 0;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <h1 class="my-4">Admin Dashboard</h1>
-        
-        <h2>Statistics</h2>
-        <ul class="list-group mb-4">
-            <li class="list-group-item">Total Clips: <%= stats.totalClips %></li>
-            <li class="list-group-item">Total Users: <%= stats.totalUsers %></li>
-            <li class="list-group-item">Total Campaigns: <%= stats.totalCampaigns %></li>
-            <li class="list-group-item">Pending Moderation: <%= stats.pendingModeration %></li>
-        </ul>
+      <h1 class="my-4">Admin Dashboard</h1>
 
-        <h2>Active Campaigns</h2>
-        <ul class="list-group mb-4">
-            <% campaigns.forEach(campaign => { %>
-                <li class="list-group-item">
-                    <strong><%= campaign.name %></strong> - Created on <%= moment(campaign.createdAt).format('YYYY-MM-DD') %>
-                    <ul>
-                        <li>Total Views: <%= campaign.totalViews %></li>
-                        <li>Max Payout: $<%= campaign.maxPayout.toFixed(2) %></li>
-                        <li>Remaining Payout: $<%= (campaign.maxPayout - (campaign.rate * campaign.totalViews)).toFixed(2) %></li>
-                        <li>Status: <%= campaign.status %></li>
-                    </ul>
-                </li>
-            <% }) %>
-        </ul>
+      <h2>Statistics</h2>
+      <ul class="list-group mb-4">
+        <li class="list-group-item">Total Clips: <%= stats.totalClips %></li>
+        <li class="list-group-item">Total Users: <%= stats.totalUsers %></li>
+        <li class="list-group-item">
+          Total Campaigns: <%= stats.totalCampaigns %>
+        </li>
+        <li class="list-group-item">
+          Pending Moderation: <%= stats.pendingModeration %>
+        </li>
+      </ul>
 
-        <h2>Recent Logs</h2>
-        <table class="table table-hover mb-4">
-            <thead class="thead-dark">
-                <tr>
-                    <th>Time</th>
-                    <th>Level</th>
-                    <th>Category</th>
-                    <th>Message</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <% logs.forEach(log => { %>
-                    <tr>
-                        <td><%= moment(log.timestamp).format('YYYY-MM-DD HH:mm:ss') %></td>
-                        <td><%= log.level %></td>
-                        <td><%= log.category %></td>
-                        <td><%= log.message %></td>
-                        <td>
-                            <button class="btn btn-info btn-sm" onclick="toggleLogDetails('<%= log.id %>')">Expand</button>
-                        </td>
-                    </tr>
-                    <tr class="log-details" id="log-<%= log.id %>">
-                        <td colspan="5">
-                            <!-- Additional log details here -->
-                            <p>Log ID: <%= log.id %></p>
-                            <p>Additional details from the database...</p>
-                        </td>
-                    </tr>
-                <% }) %>
-            </tbody>
-        </table>
+      <h2>Active Campaigns</h2>
+      <ul class="list-group mb-4">
+        <% campaigns.forEach(campaign => { %>
+        <li class="list-group-item">
+          <strong><%= campaign.name %></strong> - Created on <%=
+          moment(campaign.createdAt).format('YYYY-MM-DD') %>
+          <ul>
+            <li>Total Views: <%= campaign.totalViews %></li>
+            <li>Max Payout: $<%= campaign.maxPayout.toFixed(2) %></li>
+            <li>
+              Remaining Payout: $<%= (campaign.maxPayout - (campaign.rate *
+              campaign.totalViews)).toFixed(2) %>
+            </li>
+            <li>Status: <%= campaign.status %></li>
+          </ul>
+        </li>
+        <% }) %>
+      </ul>
 
-        <h2>All Clips</h2>
-        <table class="table table-hover">
-            <thead class="thead-dark">
-                <tr>
-                    <th>User</th>
-                    <th>URL</th>
-                    <th>Created</th>
-                    <th>Views</th>
-                </tr>
-            </thead>
-            <tbody>
-                <% clips.forEach(clip => { %>
-                    <tr>
-                        <td><%= clip.user ? clip.user.username : 'Unknown' %></td>
-                        <td><a href="<%= clip.url %>" target="_blank">View</a></td>
-                        <td><%= moment(clip.createdAt).format('YYYY-MM-DD HH:mm:ss') %></td>
-                        <td><%= clip.views || 0 %></td>
-                    </tr>
-                <% }) %>
-            </tbody>
-        </table>
+      <h2>Recent Logs</h2>
+      <table class="table table-hover mb-4">
+        <thead class="thead-dark">
+          <tr>
+            <th>Time</th>
+            <th>Level</th>
+            <th>Category</th>
+            <th>Message</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% logs.forEach(log => { %>
+          <tr>
+            <td><%= moment(log.timestamp).format('YYYY-MM-DD HH:mm:ss') %></td>
+            <td><%= log.level %></td>
+            <td><%= log.category %></td>
+            <td><%= log.message %></td>
+            <td>
+              <button
+                class="btn btn-info btn-sm"
+                onclick="toggleLogDetails('<%= log.id %>')"
+              >
+                Expand
+              </button>
+            </td>
+          </tr>
+          <tr class="log-details" id="log-<%= log.id %>" style="display: none;">
+            <td colspan="5">
+              <!-- Additional log details here -->
+
+              <p>Log ID: <%= log.id %></p>
+              <p>Log Level: <%= log.level %></p>
+              <p>Log Category: <%= log.category %></p>
+              <p>Log Message: <%= log.message %></p>
+              <p>Log Timestamp: <%= log.timestamp %></p>
+              <p>Log Metadata: <%= log.metadata %></p>
+            </td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+
+      <h2>All Clips</h2>
+      <table class="table table-hover">
+        <thead class="thead-dark">
+          <tr>
+            <th>User</th>
+            <th>URL</th>
+            <th>Created</th>
+            <th>Views</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% clips.forEach(clip => { %>
+          <tr>
+            <td><%= clip.user ? clip.user.discordId : 'Unknown' %></td>
+            <td><a href="<%= clip.url %>" target="_blank">View</a></td>
+            <td><%= moment(clip.createdAt).format('YYYY-MM-DD HH:mm:ss') %></td>
+            <td><%= clip.views || 0 %></td>
+            <td>
+              <button class="btn btn-danger btn-sm delete-clip" data-clip-id="<%= clip.id %>">X</button>
+            </td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
     </div>
 
     <!-- Add Bootstrap JS and dependencies -->
@@ -98,14 +152,33 @@
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script>
-        function toggleLogDetails(logId) {
-            const logDetails = document.getElementById('log-' + logId);
-            if (logDetails.style.display === 'none' || logDetails.style.display === '') {
-                logDetails.style.display = 'table-row';
-            } else {
-                logDetails.style.display = 'none';
-            }
+      function toggleLogDetails(logId) {
+        const logDetails = document.getElementById("log-" + logId);
+        if (logDetails.style.display === "none" || logDetails.style.display === "") {
+          logDetails.style.display = "table-row";
+        } else {
+          logDetails.style.display = "none";
         }
+      }
+
+      document.querySelectorAll('.delete-clip').forEach(button => {
+        button.addEventListener('click', async (event) => {
+          const clipId = event.target.dataset.clipId;
+          try {
+            const response = await fetch(`/admin/clips/${clipId}`, {
+              method: 'DELETE'
+            });
+            if (response.ok) {
+              // Optionally remove the clip from the DOM
+              event.target.closest('tr').remove();
+            } else {
+              console.error('Failed to delete clip');
+            }
+          } catch (error) {
+            console.error('Error:', error);
+          }
+        });
+      });
     </script>
-</body>
-</html> 
+  </body>
+</html>

@@ -44,7 +44,7 @@ export default async function handleUpload(req, res, member, options, guild) {
     }
 
     const socialMediaAccounts = await db.SocialMediaAccount.findAll({
-      where: { userId: user.id, isVerified: true }
+      where: { UserId: user.id, isVerified: true }
     });
 
     if (!user || !socialMediaAccounts.length) {
@@ -115,7 +115,7 @@ export default async function handleUpload(req, res, member, options, guild) {
         const [clip, created] = await db.Clip.findOrCreate({
           where: {
             url,
-            socialMediaAccountId: account.id,
+            SocialMediaAccountId: account.id,
           },
           defaults: {
             platform,

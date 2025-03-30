@@ -23,20 +23,6 @@ export default (sequelize) => {
       type: DataTypes.INTEGER,
       defaultValue: 0
     },
-    socialMediaAccountId: {
-      type: DataTypes.INTEGER,
-      references: {
-        model: 'SocialMediaAccounts',
-        key: 'id'
-      }
-    },
-    userId: {
-      type: DataTypes.INTEGER,
-      references: {
-        model: 'Users',
-        key: 'id'
-      }
-    },
     lastMetadataUpdate: {
       type: DataTypes.DATE,
       allowNull: true,

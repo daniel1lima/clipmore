@@ -10,6 +10,8 @@ export default async function handleStats(req, res, member) {
       where: { discordId: member.user.id }
     });
 
+    console.log(user);
+
     if (!user) {
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -21,8 +23,10 @@ export default async function handleStats(req, res, member) {
 
     // Then find all their social media accounts
     const accounts = await db.SocialMediaAccount.findAll({
-      where: { userId: user.id }
+      where: { UserId: user.id }
     });
+
+    console.log(accounts);
 
     if (!accounts.length) {
       return res.send({
@@ -44,7 +48,7 @@ export default async function handleStats(req, res, member) {
     const stats = await Promise.all(accounts.map(async (account) => {
       const clips = await db.Clip.findAll({
         where: { 
-          socialMediaAccountId: account.id,
+          SocialMediaAccountId: account.id,
           CampaignId: activeCampaign.id
         }
       });
