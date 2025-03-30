@@ -73,7 +73,7 @@ router.get('/logout', (req, res) => {
 });
 
 // Dashboard home
-router.get('/', isAuthenticated, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     // Fetch all clips
     const clips = await db.Clip.findAll({
@@ -136,7 +136,7 @@ router.get('/', isAuthenticated, async (req, res) => {
 });
 
 // Logs view
-router.get('/logs', isAuthenticated, async (req, res) => {
+router.get('/logs', async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = 50;
   const offset = (page - 1) * limit;
@@ -182,7 +182,7 @@ router.get('/logs', isAuthenticated, async (req, res) => {
 });
 
 // Clip moderation
-router.get('/moderation', isAuthenticated, async (req, res) => {
+router.get('/moderation', async (req, res) => {
   try {
     const pendingClips = await db.ClipModeration.findAll({
       where: { status: 'PENDING' },
