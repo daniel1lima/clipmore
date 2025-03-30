@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Logs</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+      body { padding: 20px; font-family: sans-serif; background: #f8f9fa; }
+      .table { margin-top: 20px; }
+      .filter-form { margin-bottom: 20px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1 class="my-4">Logs</h1>
+      <form class="filter-form" method="get" action="/admin/logs">
+        <div class="form-row">
+          <div class="form-group col-md-3">
+            <label for="startDate">Start Date</label>
+            <input type="date" class="form-control" id="startDate" name="startDate" value="<%= startDate || '' %>">
+          </div>
+          <div class="form-group col-md-3">
+            <label for="endDate">End Date</label>
+            <input type="date" class="form-control" id="endDate" name="endDate" value="<%= endDate || '' %>">
+          </div>
+          <div class="form-group col-md-3">
+            <label for="logLevel">Log Level</label>
+            <select class="form-control" id="logLevel" name="logLevel">
+              <option value="">All</option>
+              <option value="INFO" <%= logLevel === 'INFO' ? 'selected' : '' %>>INFO</option>
+              <option value="WARNING" <%= logLevel === 'WARNING' ? 'selected' : '' %>>WARNING</option>
+              <option value="ERROR" <%= logLevel === 'ERROR' ? 'selected' : '' %>>ERROR</option>
+            </select>
+            <label for="logCategory">Log Category</label>
+            <select class="form-control" id="logCategory" name="logCategory">
+              <option value="">All</option>
+              <option value="CLIP" <%= logCategory === 'CLIP' ? 'selected' : '' %>>CLIP</option>
+              <option value="CAMPAIGN" <%= logCategory === 'CAMPAIGN' ? 'selected' : '' %>>CAMPAIGN</option>
+              <option value="METADATA" <%= logCategory === 'METADATA' ? 'selected' : '' %>>METADATA</option>
+              <option value="USER" <%= logCategory === 'USER' ? 'selected' : '' %>>USER</option>
+              <option value="PAYMENT" <%= logCategory === 'PAYMENT' ? 'selected' : '' %>>PAYMENT</option>
+              <option value="SECURITY" <%= logCategory === 'SECURITY' ? 'selected' : '' %>>SECURITY</option>
+              <option value="SYSTEM" <%= logCategory === 'SYSTEM' ? 'selected' : '' %>>SYSTEM</option>
+            </select>
+          </div>
+          <div class="form-group col-md-3 align-self-end">
+            <button type="submit" class="btn btn-primary">Filter</button>
+          </div>
+        </div>
+      </form>
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th scope="col">Timestamp</th>
+            <th scope="col">Level</th>
+            <th scope="col">Message</th>
+            <th scope="col">Category</th>
+            <th scope="col">Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% logs.forEach(log => { %>
+            <tr>
+              <td><%= moment(log.timestamp).format('YYYY-MM-DD HH:mm:ss') %></td>
+              <td><%= log.level %></td>
+              <td><%= log.message %></td>
+              <td><%= log.category %></td>
+              <td><%= JSON.stringify(log.metadata) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <nav aria-label="Page navigation">
+        <ul class="pagination">
+          <% for (let i = 1; i <= totalPages; i++) { %>
+            <li class="page-item <%= currentPage === i ? 'active' : '' %>">
+              <a class="page-link" href="?page=<%= i %>&startDate=<%= startDate %>&endDate=<%= endDate %>&logLevel=<%= logLevel %>"><%= i %></a>
+            </li>
+          <% } %>
+        </ul>
+      </nav>
+    </div>
+  </body>
+</html> 

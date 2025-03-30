@@ -195,7 +195,7 @@ app.use((err, req, res, next) => {
 
 // Start the cron job
 scheduleMetadataUpdates();
-// runMetadataUpdate()
+runMetadataUpdate()
 
 app.listen(PORT, () => {
   console.log('Listening on port', PORT);

@@ -3,6 +3,7 @@ import db from '../models/index.js';
 import { MessageTemplates } from './messageTemplates.js';
 import { sendDM } from './discordManager.js';
 import { Logger, LogLevel, LogCategory } from './logger.js';
+import client from './discordClient.js';
 
 export const PLATFORM_PATTERNS = {
   INSTAGRAM: {
@@ -337,6 +338,8 @@ async function extractXMetadata(url) {
  * @returns {Promise<Object>} Results of the update operation
  */
 export async function updateClipsMetadata() {
+  const ERROR_THRESHOLD = 3; // Define a threshold for consecutive errors
+
   try {
     const campaignClips = new Map();
     const results = {
@@ -360,7 +363,8 @@ export async function updateClipsMetadata() {
         await clip.update({
           views: metadata.views,
           likes: metadata.likes,
-          lastMetadataUpdate: new Date()
+          lastMetadataUpdate: new Date(),
+          consecutiveErrors: 0 // Reset error counter on success
         });
 
         const viewDiff = metadata.views - oldViews;
@@ -384,11 +388,24 @@ export async function updateClipsMetadata() {
 
         results.success++;
       } catch (error) {
-        await Logger.log(LogLevel.ERROR, LogCategory.CLIP, 'Failed to update clip metadata', {
-          clipId: clip.id,
-          url: clip.url,
-          error: error.message
-        });
+        // Increment consecutive error counter
+        await clip.increment('consecutiveErrors');
+
+        // Check if error threshold is exceeded
+        if (clip.consecutiveErrors >= ERROR_THRESHOLD) {
+          await Logger.log(LogLevel.AUDIT, LogCategory.CLIP, 'Clip deleted due to repeated errors', {
+            clipId: clip.id,
+            url: clip.url
+          });
+          await clip.destroy(); // Remove clip from the database
+        } else {
+          await Logger.log(LogLevel.ERROR, LogCategory.CLIP, 'Failed to update clip metadata', {
+            clipId: clip.id,
+            url: clip.url,
+            error: error.message
+          });
+        }
+
         results.failed++;
         results.errors.push({
           url: clip.url,
@@ -403,26 +420,23 @@ export async function updateClipsMetadata() {
       }
     }
 
-    console.log(campaignClips)
+    // Fetch all campaigns to ensure all are included in the status
+    const allCampaigns = await db.Campaign.findAll();
+    const campaignStatuses = [];
 
-    // Campaign processing with logging
-    for (const [campaignId, clips] of campaignClips.entries()) {
-      try {
-        const campaign = await db.Campaign.findByPk(campaignId);
-        if (!campaign) {
-          console.log(`⚠️ Campaign ${campaignId} not found`);
-          continue;
-        }
+    for (const campaign of allCampaigns) {
+      const clips = campaignClips.get(campaign.id) || [];
+      const newTotalViews = clips.reduce((sum, clip) => sum + clip.views, 0);
+      const progressPercentage = (newTotalViews / campaign.maxPayout) * 100;
+      campaignStatuses.push(`${campaign.name}: ${progressPercentage.toFixed(2)}%`);
 
-
-
+      if (clips.length > 0) {
         const oldTotalViews = campaign.totalViews;
-        const newTotalViews = clips.reduce((sum, clip) => sum + clip.views, 0);
         const viewDiff = newTotalViews - oldTotalViews;
         const potentialEarnings = newTotalViews * campaign.rate;
 
         console.log(
-          `Campaign ID: ${campaignId}\n` +
+          `Campaign ID: ${campaign.id}\n` +
           `Name: ${campaign.name}\n` +
           `Status: ${campaign.status}\n` +
           `Total Views: ${oldTotalViews.toLocaleString()} → ${newTotalViews.toLocaleString()} (${viewDiff >= 0 ? '+' : ''}${viewDiff.toLocaleString()})\n` +
@@ -430,16 +444,14 @@ export async function updateClipsMetadata() {
           `${'-'.repeat(50)}`
         );
 
-        
-
-        if (campaign.status === 'ACTIVE') {
+        if (campaign.status === 'ACTIVE' && newTotalViews !== oldTotalViews) {
           await campaign.update({
             totalViews: newTotalViews
           });
 
           await Logger.log(LogLevel.INFO, LogCategory.CAMPAIGN, 
             'Campaign update', {
-              campaignId,
+              campaignId: campaign.id,
               totalViews: newTotalViews
             }
           );
@@ -447,7 +459,7 @@ export async function updateClipsMetadata() {
           if (campaign.maxPayout && potentialEarnings >= campaign.maxPayout - 100) {
             await Logger.log(LogLevel.WARNING, LogCategory.CAMPAIGN, 
               'Campaign approaching max payout - Auto-paused', {
-                campaignId,
+                campaignId: campaign.id,
                 currentEarnings: potentialEarnings,
                 maxPayout: campaign.maxPayout
               }
@@ -459,20 +471,12 @@ export async function updateClipsMetadata() {
             });
           }
         }
-      } catch (error) {
-        await Logger.log(LogLevel.ERROR, LogCategory.CAMPAIGN, 
-          'Campaign update failed', {
-            campaignId,
-            error: error.message
-          }
-        );
-        console.error(
-          `❌ Error updating campaign ${campaignId}:\n` +
-          `   Error: ${error.message}\n` +
-          `${'-'.repeat(50)}`
-        );
       }
     }
+
+    // Update bot status with all campaigns' progress
+    const statusMessage = campaignStatuses.join(' | ');
+    await updateBotDescription('all', statusMessage);
 
     // Final summary
     console.log('\n📊 Update Summary:\n' + '-'.repeat(50));
@@ -499,4 +503,27 @@ export async function updateClipsMetadata() {
     );
     throw error;
   }
-} 
+}
+
+// Function to update the bot's status
+async function updateBotDescription(campaignId, description) {
+  try {
+    // Ensure the client is ready
+    if (!client.isReady()) {
+      console.error('Discord client is not ready');
+      return;
+    }
+
+    // Set the bot's presence
+    client.user.setPresence({
+      activities: [{ name: description }],
+      status: 'online'
+    });
+
+    console.log(`Bot status updated for campaign ${campaignId}: ${description}`);
+  } catch (error) {
+    console.error(`Failed to update bot status for campaign ${campaignId}: ${error.message}`);
+  }
+}
+
+

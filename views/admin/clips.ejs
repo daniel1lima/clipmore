@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>All Clips</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+      body { padding: 20px; font-family: sans-serif; background: #282525; }
+      .table { color: #ead7d5; background: #6e6868; }
+      h1 { color: #e74c3c; margin-top: 0; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1 class="my-4">All Clips</h1>
+      <table class="table table-hover">
+        <thead class="thead-dark">
+          <tr>
+            <th>ID</th>
+            <th>User</th>
+            <th>URL</th>
+            <th>Created</th>
+            <th>Views</th>
+            <th>Campaign</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% clips.forEach(clip => { %>
+          <tr>
+            <td><%= clip.id %></td>
+            <td><%= clip.user ? clip.user.discordId : 'Unknown' %></td>
+            <td><a href="<%= clip.url %>" target="_blank">View</a></td>
+            <td><%= moment(clip.createdAt).format('YYYY-MM-DD HH:mm:ss') %></td>
+            <td><%= clip.views || 0 %></td>
+            <td><%= clip.campaign ? clip.campaign.name : 'None' %></td>
+            <td>
+              <button class="btn btn-danger btn-sm delete-clip" data-clip-id="<%= clip.id %>">X</button>
+            </td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Add Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+      document.querySelectorAll('.delete-clip').forEach(button => {
+        button.addEventListener('click', async (event) => {
+          const clipId = event.target.dataset.clipId;
+          try {
+            const response = await fetch(`/admin/clips/${clipId}`, {
+              method: 'DELETE'
+            });
+            if (response.ok) {
+              // Optionally remove the clip from the DOM
+              event.target.closest('tr').remove();
+            } else {
+              console.error('Failed to delete clip');
+            }
+          } catch (error) {
+            console.error('Error:', error);
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

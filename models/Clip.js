@@ -27,6 +27,10 @@ export default (sequelize) => {
       type: DataTypes.DATE,
       allowNull: true,
       defaultValue: DataTypes.NOW
+    },
+    consecutiveErrors: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0
     }
   });
 

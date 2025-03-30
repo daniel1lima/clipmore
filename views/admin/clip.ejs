@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Clip Details</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+      body { padding: 20px; font-family: sans-serif; background: #282525; }
+      .table { color: #ead7d5; background: #6e6868; }
+      h1 { color: #e74c3c; margin-top: 0; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1 class="my-4">Clip Details</h1>
+      <table class="table table-hover">
+        <thead class="thead-dark">
+          <tr>
+            <th>User</th>
+            <th>URL</th>
+            <th>Created</th>
+            <th>Views</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><%= clip.user ? clip.user.discordId : 'Unknown' %></td>
+            <td><a href="<%= clip.url %>" target="_blank">View</a></td>
+            <td><%= moment(clip.createdAt).format('YYYY-MM-DD HH:mm:ss') %></td>
+            <td><%= clip.views || 0 %></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </body>
+</html>

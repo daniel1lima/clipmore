@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Campaign Details</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+      body { padding: 20px; font-family: sans-serif; background: #282525; }
+      .table { color: #ead7d5; background: #6e6868; }
+      h1 { color: #e74c3c; margin-top: 0; }
+      .list-group-item { background-color: #6e6868; color: #ead7d5; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1 class="my-4">Campaign Details</h1>
+      <% if (campaigns && campaigns.length > 0) { %>
+        <% campaigns.forEach(campaign => { %>
+          <ul class="list-group mb-4">
+            <li class="list-group-item"><strong>Name:</strong> <%= campaign.name || 'N/A' %></li>
+            <li class="list-group-item"><strong>Created on:</strong> <%= moment(campaign.createdAt).format('YYYY-MM-DD') || 'N/A' %></li>
+            <li class="list-group-item"><strong>Total Views:</strong> <%= campaign.totalViews || 0 %></li>
+            <li class="list-group-item"><strong>Max Payout:</strong> $<%= (campaign.maxPayout || 0).toFixed(2) %></li>
+            <li class="list-group-item"><strong>Remaining Payout:</strong> $<%= ((campaign.maxPayout || 0) - ((campaign.rate || 0) * (campaign.totalViews || 0))).toFixed(2) %></li>
+            <li class="list-group-item"><strong>Status:</strong> <%= campaign.status || 'N/A' %></li>
+          </ul>
+        <% }) %>
+      <% } else { %>
+        <p class="text-danger">No campaigns available.</p>
+      <% } %>
+    </div>
+  </body>
+</html>
