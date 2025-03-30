@@ -27,10 +27,50 @@ import {
   handleUpdateCampaign
 } from './handlers/index.js';
 import { scheduleMetadataUpdates, runMetadataUpdate } from './tasks/updateMetadata.js';
+import adminRouter from './routes/admin.js';
+import session from 'express-session';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 // Create an express app
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Get __dirname equivalent in ES modules
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Add middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Setup view engine
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+
+// Setup session middleware
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Remove authentication middleware
+app.use('/admin', adminRouter);
+
+// Add root route
+app.get('/', (req, res) => {
+  res.redirect('/admin');
+});
+
+// Add health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
 
 /**
  * Interactions endpoint URL where Discord will send HTTP requests
@@ -133,9 +173,29 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
   return res.status(400).json({ error: 'unknown interaction type' });
 });
 
+// Add error handling for 404s
+app.use((req, res, next) => {
+  res.status(404).render('error', {
+    message: 'Page not found',
+    error: {
+      status: 404,
+      stack: process.env.NODE_ENV === 'development' ? 'Page not found' : ''
+    }
+  });
+});
+
+// Add error handling middleware
+app.use((err, req, res, next) => {
+  const status = err.status || 500;
+  res.status(status).render('error', {
+    message: err.message,
+    error: process.env.NODE_ENV === 'development' ? err : {}
+  });
+});
+
 // Start the cron job
 scheduleMetadataUpdates();
-runMetadataUpdate()
+// runMetadataUpdate()
 
 app.listen(PORT, () => {
   console.log('Listening on port', PORT);

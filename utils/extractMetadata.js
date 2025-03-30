@@ -2,6 +2,7 @@ import https from 'https';
 import db from '../models/index.js';
 import { MessageTemplates } from './messageTemplates.js';
 import { sendDM } from './discordManager.js';
+import { Logger, LogLevel, LogCategory } from './logger.js';
 
 export const PLATFORM_PATTERNS = {
   INSTAGRAM: {
@@ -331,6 +332,10 @@ async function extractXMetadata(url) {
   });
 }
 
+/**
+ * Updates metadata for all clips and their associated campaigns
+ * @returns {Promise<Object>} Results of the update operation
+ */
 export async function updateClipsMetadata() {
   try {
     const campaignClips = new Map();
@@ -338,45 +343,34 @@ export async function updateClipsMetadata() {
       success: 0,
       failed: 0,
       errors: [],
-      viewUpdates: [] // Track view changes
+      viewUpdates: []
     };
 
     const clips = await db.Clip.findAll();
-    console.log(`\n🔄 Starting metadata update for ${clips.length} clips\n${'-'.repeat(50)}`);
+    
+    await Logger.log(LogLevel.INFO, LogCategory.METADATA, 
+      `Starting metadata update for ${clips.length} clips`
+    );
 
     for (const clip of clips) {
       try {
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limiting
-        
-        // Store old views for comparison
         const oldViews = clip.views;
         const metadata = await extractClipMetadata(clip.url, true);
         
-        // Update clip metadata
         await clip.update({
           views: metadata.views,
           likes: metadata.likes,
           lastMetadataUpdate: new Date()
         });
 
-        // Log view changes
         const viewDiff = metadata.views - oldViews;
-        const viewChange = viewDiff >= 0 ? `+${viewDiff}` : viewDiff;
         
-        console.log(
-          `📊 Clip Update:\n` +
-          `   URL: ${clip.url}\n` +
-          `   Views: ${oldViews.toLocaleString()} → ${metadata.views.toLocaleString()} (${viewChange})\n` +
-          `   Likes: ${metadata.likes.toLocaleString()}\n` +
-          `   Campaign ID: ${clip.CampaignId || 'None'}\n` +
-          `${'-'.repeat(50)}`
-        );
-
-        results.viewUpdates.push({
+        await Logger.log(LogLevel.INFO, LogCategory.CLIP, 'Clip metadata updated', {
+          clipId: clip.id,
           url: clip.url,
           oldViews,
           newViews: metadata.views,
-          change: viewDiff,
+          viewDiff,
           campaignId: clip.CampaignId
         });
 
@@ -390,6 +384,11 @@ export async function updateClipsMetadata() {
 
         results.success++;
       } catch (error) {
+        await Logger.log(LogLevel.ERROR, LogCategory.CLIP, 'Failed to update clip metadata', {
+          clipId: clip.id,
+          url: clip.url,
+          error: error.message
+        });
         results.failed++;
         results.errors.push({
           url: clip.url,
@@ -404,9 +403,9 @@ export async function updateClipsMetadata() {
       }
     }
 
-    // Campaign updates with detailed logging
-    console.log('\n📈 Campaign Updates Summary:\n' + '-'.repeat(50));
-    
+    console.log(campaignClips)
+
+    // Campaign processing with logging
     for (const [campaignId, clips] of campaignClips.entries()) {
       try {
         const campaign = await db.Campaign.findByPk(campaignId);
@@ -414,6 +413,8 @@ export async function updateClipsMetadata() {
           console.log(`⚠️ Campaign ${campaignId} not found`);
           continue;
         }
+
+
 
         const oldTotalViews = campaign.totalViews;
         const newTotalViews = clips.reduce((sum, clip) => sum + clip.views, 0);
@@ -429,17 +430,27 @@ export async function updateClipsMetadata() {
           `${'-'.repeat(50)}`
         );
 
+        
+
         if (campaign.status === 'ACTIVE') {
           await campaign.update({
             totalViews: newTotalViews
           });
 
+          await Logger.log(LogLevel.INFO, LogCategory.CAMPAIGN, 
+            'Campaign update', {
+              campaignId,
+              totalViews: newTotalViews
+            }
+          );
+
           if (campaign.maxPayout && potentialEarnings >= campaign.maxPayout - 100) {
-            console.log(
-              `🚨 Campaign ${campaignId} approaching max payout - Setting to PAUSED\n` +
-              `   Current Earnings: $${potentialEarnings.toFixed(2)}\n` +
-              `   Max Payout: $${campaign.maxPayout}\n` +
-              `${'-'.repeat(50)}`
+            await Logger.log(LogLevel.WARNING, LogCategory.CAMPAIGN, 
+              'Campaign approaching max payout - Auto-paused', {
+                campaignId,
+                currentEarnings: potentialEarnings,
+                maxPayout: campaign.maxPayout
+              }
             );
             
             await campaign.update({
@@ -449,6 +460,12 @@ export async function updateClipsMetadata() {
           }
         }
       } catch (error) {
+        await Logger.log(LogLevel.ERROR, LogCategory.CAMPAIGN, 
+          'Campaign update failed', {
+            campaignId,
+            error: error.message
+          }
+        );
         console.error(
           `❌ Error updating campaign ${campaignId}:\n` +
           `   Error: ${error.message}\n` +
@@ -474,7 +491,12 @@ export async function updateClipsMetadata() {
       viewUpdates: results.viewUpdates
     };
   } catch (error) {
-    console.error('Failed to update clips metadata:', error);
+    await Logger.log(LogLevel.ERROR, LogCategory.SYSTEM, 
+      'Metadata update process failed', {
+        error: error.message,
+        stack: error.stack
+      }
+    );
     throw error;
   }
 } 
