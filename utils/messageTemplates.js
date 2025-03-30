@@ -438,7 +438,8 @@ export const MessageTemplates = {
           description: [
             `**Total Clips:** ${totalStats.clipCount}`,
             `**Total Views:** ${formatNumber(totalStats.totalViews)}`,
-            `**Total Likes:** ${formatNumber(totalStats.totalLikes)}`
+            `**Total Likes:** ${formatNumber(totalStats.totalLikes)}`,
+            `**Total Earnings:** $${totalStats.totalEarnings.toFixed(2)}`
           ].join('\n')
         },
         // Earnings embed
@@ -448,7 +449,6 @@ export const MessageTemplates = {
           description: activeCampaign
             ? [
                 `**Estimated Earnings:** $${(totalStats.totalViews * activeCampaign.rate).toFixed(2)}`,
-                `**Current Rate:** $${activeCampaign.rate} per view`,
                 activeCampaign.maxPayout ? `**Maximum Payout:** $${activeCampaign.maxPayout}` : '',
                 '',
                 `*Campaign: ${activeCampaign.name}*`

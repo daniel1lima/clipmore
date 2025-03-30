@@ -43,30 +43,45 @@ export default async function handleStats(req, res, member) {
     // Get all clips for each account
     const stats = await Promise.all(accounts.map(async (account) => {
       const clips = await db.Clip.findAll({
-        where: { socialMediaAccountId: account.id }
+        where: { 
+          socialMediaAccountId: account.id,
+          CampaignId: activeCampaign.id
+        }
       });
+
+      if (clips.length === 0) {
+        return null; // Skip accounts with no clips
+      }
 
       const totalViews = clips.reduce((sum, clip) => sum + clip.views, 0);
       const totalLikes = clips.reduce((sum, clip) => sum + clip.likes, 0);
+      
+      // Calculate earnings based on total views and the campaign rate
+      const earnings = totalViews * activeCampaign.rate; // Assuming rate is defined in activeCampaign
       
       return {
         platform: account.platform,
         username: account.username,
         clipCount: clips.length,
         totalViews,
-        totalLikes
+        totalLikes,
+        earnings // Include earnings in the stats
       };
     }));
 
-    const totalStats = stats.reduce((acc, stat) => ({
+    // Filter out null entries (accounts with no clips)
+    const filteredStats = stats.filter(stat => stat !== null);
+
+    const totalStats = filteredStats.reduce((acc, stat) => ({
       clipCount: acc.clipCount + stat.clipCount,
       totalViews: acc.totalViews + stat.totalViews,
-      totalLikes: acc.totalLikes + stat.totalLikes
-    }), { clipCount: 0, totalViews: 0, totalLikes: 0 });
+      totalLikes: acc.totalLikes + stat.totalLikes,
+      totalEarnings: acc.totalEarnings + stat.earnings // Sum up total earnings
+    }), { clipCount: 0, totalViews: 0, totalLikes: 0, totalEarnings: 0 });
 
     return res.send({
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: MessageTemplates.statsPanel(stats, totalStats, activeCampaign)
+      data: MessageTemplates.statsPanel(filteredStats, totalStats, activeCampaign)
     });
 
   } catch (error) {
