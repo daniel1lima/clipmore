@@ -416,7 +416,7 @@ router.get('/dashboard/payments', async (req, res) => {
       return acc;
     }, {});
 
-    // Get clips created after each user's last payment (or all clips if never paid)
+    // Get clips with views created after each user's last payment
     const whereClause = {};
     if (campaignId) {
       whereClause.CampaignId = campaignId;
@@ -424,7 +424,7 @@ router.get('/dashboard/payments', async (req, res) => {
 
     const clips = await db.Clip.findAll({
       where: whereClause,
-      attributes: ['id', 'url', 'UserId', 'CampaignId', 'createdAt'],
+      attributes: ['id', 'url', 'UserId', 'CampaignId', 'createdAt', 'views'],
       raw: true
     });
 
@@ -472,16 +472,23 @@ router.get('/dashboard/payments', async (req, res) => {
           totalOwed: 0,
           clips: [],
           campaigns: new Set(),
-          lastPaidAt: lastPaymentByUser[userId] || null
+          lastPaidAt: lastPaymentByUser[userId] || null,
+          totalViews: 0
         };
       }
       
-      acc[userId].totalOwed += campaign.rate;
+      // Calculate earnings for this clip based on views * rate
+      const clipEarnings = (clip.views || 0) * campaign.rate;
+      acc[userId].totalOwed += clipEarnings;
+      acc[userId].totalViews += (clip.views || 0);
+      
       acc[userId].clips.push({
         id: clip.id,
         url: clip.url,
         campaignName: campaign.name,
         rate: campaign.rate,
+        views: clip.views || 0,
+        earnings: clipEarnings,
         createdAt: clip.createdAt
       });
       acc[userId].campaigns.add(campaign.name);
@@ -495,7 +502,8 @@ router.get('/dashboard/payments', async (req, res) => {
       .map(payment => ({
         ...payment,
         campaigns: Array.from(payment.campaigns),
-        clipCount: payment.clips.length
+        clipCount: payment.clips.length,
+        totalOwed: Number(payment.totalOwed.toFixed(4)) // Round to 2 decimal places
       }));
 
     res.json(paymentData);

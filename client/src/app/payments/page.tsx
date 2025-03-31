@@ -3,6 +3,32 @@
 import { useEffect, useState } from 'react';
 import { dashboardApi } from '@/lib/api';
 import { PaymentUser, PaymentCampaign } from '@/lib/api';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+  } from "@/components/ui/popover"
+
+import { Button } from "@/components/ui/button"
+import { Check, ChevronsUpDown } from "lucide-react"
+import { cn } from "@/lib/utils"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command"
+import { SidebarTrigger } from '@/components/ui/sidebar';
+
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<PaymentUser[]>([]);
   const [campaigns, setCampaigns] = useState<PaymentCampaign[]>([]);
@@ -34,26 +60,66 @@ export default function PaymentsPage() {
 
   return (
     <div className="p-4">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-4">Payment Management</h1>
+    <SidebarTrigger className="text-white mt-2 ml-2 hover:cursor-pointer"/>
+      <div className="mb-6 p-5">
+        <h1 className="text-2xl font-bold mb-4 text-white">Payment Management</h1>
+        
         
         <div className="mb-4">
-          <select
-            className="border rounded p-2"
-            value={selectedCampaign}
-            onChange={(e) => setSelectedCampaign(e.target.value)}
-          >
-            <option value="">All Campaigns</option>
-            {campaigns.map((campaign) => (
-              <option key={campaign.id} value={campaign.id}>
-                {campaign.name}
-              </option>
-            ))}
-          </select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-[280px] justify-between"
+              >
+                {selectedCampaign
+                  ? campaigns.find((campaign) => campaign.id === selectedCampaign)?.name
+                  : "Select campaign..."}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[280px] p-2">
+              <div className="space-y-1">
+                <div
+                  className={cn(
+                    "flex items-center px-2 py-2 rounded-md cursor-pointer hover:bg-slate-100",
+                    selectedCampaign === "" && "bg-slate-100"
+                  )}
+                  onClick={() => setSelectedCampaign("")}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      selectedCampaign === "" ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  All Campaigns
+                </div>
+                {campaigns.map((campaign) => (
+                  <div
+                    key={campaign.id}
+                    className={cn(
+                      "flex items-center px-2 py-2 rounded-md cursor-pointer hover:bg-slate-100",
+                      selectedCampaign === campaign.id && "bg-slate-100"
+                    )}
+                    onClick={() => setSelectedCampaign(campaign.id)}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        selectedCampaign === campaign.id ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {campaign.name}
+                  </div>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto bg-white rounded-lg">
         <table className="min-w-full bg-white border rounded-lg">
           <thead className="bg-gray-50">
             <tr>

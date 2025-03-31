@@ -3,6 +3,7 @@ import {
   ClerkProvider,
   SignIn,
   SignInButton,
+  SignOutButton,
   SignUpButton,
   SignedIn,
   SignedOut,

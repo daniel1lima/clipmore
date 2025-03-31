@@ -118,7 +118,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gray-900 text-white">
+    <div className="min-h-screen w-full bg-gray-900 text-white p-4">
       <SidebarTrigger className='mt-2 ml-2 hover:cursor-pointer'
       />
       <div className="container mx-auto px-4 py-8">
