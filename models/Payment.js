@@ -9,24 +9,34 @@ export default (sequelize) => {
     },
     userId: {
       type: DataTypes.INTEGER,
+      allowNull: false,
       references: {
         model: 'Users',
         key: 'id'
       }
     },
-    type: {
-      type: DataTypes.ENUM('USDT', 'CASHAPP', 'ETH', 'BTC', 'PAYPAL'),
+    amount: {
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: false
     },
-    address: {
+    paidAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW
+    },
+    paymentMethod: {
       type: DataTypes.STRING,
       allowNull: false
     },
-    isActive: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: true
+    transactionId: {
+      type: DataTypes.STRING,
+      allowNull: true
     }
   });
+
+  Payment.associate = (models) => {
+    Payment.belongsTo(models.User);
+  };
 
   return Payment;
 }; 

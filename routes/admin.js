@@ -8,69 +8,6 @@ dotenv.config();
 
 const router = express.Router();
 
-// Create login rate limiter
-const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minute window
-    max: 5, // 5 attempts per window
-    message: { error: 'Too many login attempts. Please try again after 15 minutes.' },
-    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-});
-
-// Global rate limiter for all admin routes
-const globalLimiter = rateLimit({
-    windowMs: 60 * 1000, // 1 minute
-    max: 100, // 100 requests per minute
-    message: { error: 'Too many requests. Please try again later.' }
-});
-
-// Apply to all routes
-router.use(globalLimiter);
-
-// Middleware to check if user is authenticated
-function isAuthenticated(req, res, next) {
-  if (req.session && req.session.user) {
-    return next();
-  } else {
-    res.redirect('/admin/login');
-  }
-}
-
-// Login route
-router.get('/login', (req, res) => {
-  res.render('admin/login');
-});
-
-router.post('/login', loginLimiter, async (req, res) => {
-  const { username, password } = req.body;
-  
-  const correctUsername = process.env.ADMIN_USERNAME;
-  const correctPassword = process.env.ADMIN_PASSWORD;
-
-  if (!correctUsername || !correctPassword) {
-    console.error('Admin credentials not properly configured in .env file');
-    return res.status(500).render('error', { 
-      error: 'Server configuration error' 
-    });
-  }
-
-  if (username === correctUsername && password === correctPassword) {
-    req.session.user = { username };
-    res.redirect('/admin');
-  } else {
-    res.render('admin/login', { error: 'Invalid credentials' });
-  }
-});
-
-// Logout route
-router.get('/logout', (req, res) => {
-  req.session.destroy(err => {
-    if (err) {
-      return res.status(500).render('error', { error: 'Failed to logout' });
-    }
-    res.redirect('/admin/login');
-  });
-});
 
 // Dashboard home
 router.get('/', async (req, res) => {
@@ -386,6 +323,200 @@ router.get('/campaign/:campaignId', async (req, res) => {
   } catch (error) {
     console.error('Error fetching campaign:', error);
     res.status(500).render('error', { message: 'Failed to load campaign details' });
+  }
+});
+
+// API Routes for Dashboard
+router.get('/dashboard/stats', async (req, res) => {
+  try {
+    const stats = {
+      totalClips: await db.Clip.count(),
+      totalUsers: await db.User.count(),
+      totalCampaigns: await db.Campaign.count(),
+      pendingModeration: await db.ClipModeration.count({ where: { status: 'PENDING' } })
+    };
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+router.get('/dashboard/campaigns', async (req, res) => {
+  try {
+    const campaigns = await db.Campaign.findAll({
+      where: { status: 'ACTIVE' },
+      order: [['createdAt', 'DESC']],
+      limit: 10
+    });
+    res.json(campaigns);
+  } catch (error) {
+    console.error('Error fetching campaigns:', error);
+    res.status(500).json({ error: 'Failed to fetch campaigns' });
+  }
+});
+
+router.get('/dashboard/logs', async (req, res) => {
+  try {
+    const logs = await db.Log.findAll({
+      order: [['timestamp', 'DESC']],
+      limit: 20
+    });
+    res.json(logs);
+  } catch (error) {
+    console.error('Error fetching logs:', error);
+    res.status(500).json({ error: 'Failed to fetch logs' });
+  }
+});
+
+router.get('/dashboard/clips', async (req, res) => {
+  try {
+    const clips = await db.Clip.findAll({
+      include: [{
+        model: db.User,
+        attributes: ['discordId']
+      }],
+      order: [['createdAt', 'DESC']],
+      limit: 20
+    });
+    res.json(clips);
+  } catch (error) {
+    console.error('Error fetching clips:', error);
+    res.status(500).json({ error: 'Failed to fetch clips' });
+  }
+});
+
+router.delete('/dashboard/clips/:clipId', async (req, res) => {
+  const { clipId } = req.params;
+  try {
+    await db.Clip.destroy({ where: { id: clipId } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting clip:', error);
+    res.status(500).json({ error: 'Failed to delete clip' });
+  }
+});
+
+// Get payment information for users
+router.get('/dashboard/payments', async (req, res) => {
+  try {
+    const { campaignId } = req.query;
+    
+    // First get all users who have been paid
+    const payments = await db.Payment.findAll({
+      attributes: ['userId', 'paidAt'],
+      raw: true
+    });
+
+    // Get the most recent payment date for each user
+    const lastPaymentByUser = payments.reduce((acc, payment) => {
+      if (!acc[payment.userId] || new Date(payment.paidAt) > new Date(acc[payment.userId])) {
+        acc[payment.userId] = payment.paidAt;
+      }
+      return acc;
+    }, {});
+
+    // Get clips created after each user's last payment (or all clips if never paid)
+    const whereClause = {};
+    if (campaignId) {
+      whereClause.CampaignId = campaignId;
+    }
+
+    const clips = await db.Clip.findAll({
+      where: whereClause,
+      attributes: ['id', 'url', 'UserId', 'CampaignId', 'createdAt'],
+      raw: true
+    });
+
+    // Filter clips to only include those after last payment
+    const unpaidClips = clips.filter(clip => {
+      const lastPayment = lastPaymentByUser[clip.UserId];
+      return !lastPayment || new Date(clip.createdAt) > new Date(lastPayment);
+    });
+
+    // Get unique user and campaign IDs
+    const userIds = [...new Set(unpaidClips.map(clip => clip.UserId))];
+    const campaignIds = [...new Set(unpaidClips.map(clip => clip.CampaignId))];
+
+    // Fetch users and campaigns
+    const [users, campaigns] = await Promise.all([
+      db.User.findAll({
+        where: { id: userIds },
+        attributes: ['id', 'discordId', 'paypalEmail'],
+        raw: true
+      }),
+      db.Campaign.findAll({
+        where: { id: campaignIds },
+        attributes: ['id', 'name', 'rate'],
+        raw: true
+      })
+    ]);
+
+    // Create lookup maps
+    const userMap = new Map(users.map(user => [user.id, user]));
+    const campaignMap = new Map(campaigns.map(campaign => [campaign.id, campaign]));
+
+    // Group clips by user and calculate totals
+    const paymentsByUser = unpaidClips.reduce((acc, clip) => {
+      const userId = clip.UserId;
+      const user = userMap.get(userId);
+      const campaign = campaignMap.get(clip.CampaignId);
+
+      if (!user || !campaign) return acc;
+
+      if (!acc[userId]) {
+        acc[userId] = {
+          userId: userId,
+          discordId: user.discordId,
+          paypalEmail: user.paypalEmail,
+          totalOwed: 0,
+          clips: [],
+          campaigns: new Set(),
+          lastPaidAt: lastPaymentByUser[userId] || null
+        };
+      }
+      
+      acc[userId].totalOwed += campaign.rate;
+      acc[userId].clips.push({
+        id: clip.id,
+        url: clip.url,
+        campaignName: campaign.name,
+        rate: campaign.rate,
+        createdAt: clip.createdAt
+      });
+      acc[userId].campaigns.add(campaign.name);
+      
+      return acc;
+    }, {});
+
+    // Convert to array and format campaigns
+    const paymentData = Object.values(paymentsByUser)
+      .filter(payment => payment.totalOwed > 0) // Only include users with unpaid earnings
+      .map(payment => ({
+        ...payment,
+        campaigns: Array.from(payment.campaigns),
+        clipCount: payment.clips.length
+      }));
+
+    res.json(paymentData);
+  } catch (error) {
+    console.error('Error fetching payment data:', error);
+    res.status(500).json({ error: 'Failed to fetch payment data' });
+  }
+});
+
+// Get all active campaigns for filtering
+router.get('/dashboard/payment-campaigns', async (req, res) => {
+  try {
+    const campaigns = await db.Campaign.findAll({
+      attributes: ['id', 'name'],
+      where: { status: 'ACTIVE' },
+      raw: true
+    });
+    res.json(campaigns);
+  } catch (error) {
+    console.error('Error fetching campaigns:', error);
+    res.status(500).json({ error: 'Failed to fetch campaigns' });
   }
 });
 
