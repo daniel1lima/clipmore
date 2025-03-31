@@ -48,17 +48,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Setup session middleware
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
-}));
-
 // Remove authentication middleware
 app.use('/admin', adminRouter);
 
@@ -76,7 +65,7 @@ app.get('/health', (req, res) => {
  * Interactions endpoint URL where Discord will send HTTP requests
  * Parse request body and verifies incoming requests using discord-interactions package
  */
-app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
+app.post('/interactions', async function (req, res) {
   const { type, data, member, guild } = req.body;
   
   // Silently ignore DMs by returning early if there's no guild

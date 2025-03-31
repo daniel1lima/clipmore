@@ -9,6 +9,8 @@ import { sendDM } from '../utils/discordManager.js';
 export default async function handleCreateCampaign(req, res, guild, member, options) {
   const ANNOUNCEMENT_CHANNEL_ID = '1354216779374792805';
   
+  console.log(req.body);
+  
   try {
     // Extract all options from the options array
 
@@ -60,7 +62,7 @@ export default async function handleCreateCampaign(req, res, guild, member, opti
       endDate,
       allowedPlatforms: platformsArray,
       discordGuildId: guildId,
-      status: 'DRAFT',
+      status: 'ACTIVE',
       totalViews: 0,
       totalLikes: 0,
       soundURL: soundURLArray
