@@ -35,24 +35,32 @@ interface Clip {
     discordId: string;
   };
 }
+interface ClipBreakdown {
+  id: string;
+  url: string;
+  views: number;
+  rate: number;
+  earnings: number;
+  createdAt: string;
+}
 
 export interface PaymentUser {
-  userId: string;
   discordId: string;
   paypalEmail: string;
   totalOwed: number;
   clipCount: number;
   campaigns: string[];
-  clips: {
-    id: string;
-    url: string;
-    campaignName: string;
-    rate: number;
-  }[];
-}
+  status: 'PENDING' | 'PAID' | 'FAILED';
+  amountPaid: number;
+  paymentDate?: string;
+  paymentMethod?: string;
+  expedite: boolean;
+  createdBy?: string;
+  paidBy?: string;
+} 
 
 export interface PaymentCampaign {
-  id: string;
+  discordGuildId: string;
   name: string;
 }
 
@@ -62,6 +70,19 @@ export const dashboardApi = {
       credentials: 'include', // This is important for cookies/session
     });
     if (!response.ok) throw new Error('Failed to fetch stats');
+    return response.json();
+  },
+  // Add to your API client
+
+  
+  getPaymentClips: async (discordId: string, discordGuildId: string): Promise<{
+    campaignName: string;
+    clips: ClipBreakdown[];
+  }> => {
+    const response = await fetch(`${API_BASE_URL}/admin/dashboard/payment-clips/${discordId}/${discordGuildId}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch payment clips');
+    }
     return response.json();
   },
 

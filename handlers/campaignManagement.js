@@ -4,11 +4,7 @@ import { CampaignStatus } from '../models/Campaign.js';
 export async function handlePauseCampaign(req, res, guild, member, options) {
 
   try {
-    const campaign = await db.Campaign.findOne({
-      where: {
-        discordGuildId: guild.id
-      }
-    });
+    const campaign = await db.Campaign.findByPk(guild.id);
 
     if (!campaign) {
       return res.send({
@@ -45,11 +41,7 @@ export async function handlePauseCampaign(req, res, guild, member, options) {
 export async function handleEndCampaign(req, res, guild, member, options) {
 
   try {
-    const campaign = await db.Campaign.findOne({
-      where: {
-        discordGuildId: guild.id
-      }
-    });
+    const campaign = await db.Campaign.findByPk(guild.id);
 
     if (!campaign) {
       return res.send({
@@ -87,11 +79,7 @@ export async function handleEndCampaign(req, res, guild, member, options) {
 export async function handleStartCampaign(req, res, guild, member, options) {
 
   try {
-    const campaign = await db.Campaign.findOne({
-      where: {
-        discordGuildId: guild.id
-      }
-    });
+    const campaign = await db.Campaign.findByPk(guild.id);
 
     if (!campaign) {
       return res.send({
@@ -130,11 +118,7 @@ export async function handleUpdateCampaign(req, res, guild, member, options) {
   const value = options.find(opt => opt.name === 'value')?.value;
 
   try {
-    const campaign = await db.Campaign.findOne({
-      where: {
-        discordGuildId: guild.id
-      }
-    });
+    const campaign = await db.Campaign.findByPk(guild.id);
 
     if (!campaign) {
       return res.send({

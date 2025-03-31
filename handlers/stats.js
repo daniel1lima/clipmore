@@ -6,23 +6,23 @@ import { CampaignStatus } from '../models/Campaign.js';
 export default async function handleStats(req, res, member) {
   try {
     // First find the user
-    const user = await db.User.findOne({
-      where: { discordId: member.user.id }
-    });
+    const user = await db.User.findByPk(member.user.id);
 
 
     if (!user) {
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: 'No stats available. Please register first!'
-        }
+          content: 'No stats available. Please register first!',
+          flags: 64
+        },
+        
       });
     }
 
     // Then find all their social media accounts
     const accounts = await db.SocialMediaAccount.findAll({
-      where: { UserId: user.id }
+      where: { userDiscordId: user.discordId }
     });
 
 
@@ -30,8 +30,9 @@ export default async function handleStats(req, res, member) {
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: 'No stats available. Please add some social media accounts first!'
-        }
+          content: 'No stats available. Please add some social media accounts first!',
+          flags: 64
+        },
       });
     }
 
@@ -46,8 +47,8 @@ export default async function handleStats(req, res, member) {
     const stats = await Promise.all(accounts.map(async (account) => {
       const clips = await db.Clip.findAll({
         where: { 
-          SocialMediaAccountId: account.id,
-          CampaignId: activeCampaign.id
+          socialMediaAccountId: account.id,
+          discordGuildId: activeCampaign.discordGuildId
         }
       });
 

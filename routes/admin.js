@@ -4,6 +4,7 @@ import moment from 'moment';
 import path from 'path';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+import { testCampaignPayouts } from '../utils/extractMetadata.js';
 dotenv.config();
 
 const router = express.Router();
@@ -12,28 +13,14 @@ const router = express.Router();
 // Dashboard home
 router.get('/', async (req, res) => {
   try {
-    // Fetch all clips
+    // Fetch all clips with user info directly through association
     const clips = await db.Clip.findAll({
+      include: [{
+        model: db.User,
+        attributes: ['discordId']
+      }],
       order: [['createdAt', 'DESC']]
     });
-
-    // Get user IDs for these clips
-    const userIds = clips.map(clip => clip.UserId);
-
-    // Fetch users with discordId
-    const users = await db.User.findAll({
-      where: { id: userIds },
-      attributes: ['id', 'discordId']
-    });
-
-    // Create a map for quick lookups
-    const usersMap = new Map(users.map(user => [user.id, user]));
-
-    // Combine the data
-    const clipsWithData = clips.map(clip => ({
-      ...clip.toJSON(),
-      user: usersMap.get(clip.UserId)
-    }));
 
     // Fetch active campaigns
     const activeCampaigns = await db.Campaign.findAll({
@@ -56,7 +43,7 @@ router.get('/', async (req, res) => {
     };
 
     res.render('admin/dashboard', {
-      clips: clipsWithData,
+      clips,
       campaigns: activeCampaigns,
       logs,
       stats,
@@ -186,37 +173,22 @@ router.get('/clips', async (req, res) => {
     const offset = (page - 1) * limit;
 
     const { count, rows: clips } = await db.Clip.findAndCountAll({
+      include: [{
+        model: db.User,
+        attributes: ['discordId']
+      }, {
+        model: db.Campaign,
+        attributes: ['discordGuildId', 'name']
+      }],
       order: [['createdAt', 'DESC']],
       limit,
       offset
     });
 
-    // Get users and campaigns for these clips
-    const userIds = clips.map(clip => clip.UserId);
-    const campaignIds = clips.map(clip => clip.CampaignId);
-
-    const [users, campaigns] = await Promise.all([
-      db.User.findAll({
-        where: { id: userIds },
-        attributes: ['id', 'discordId']
-      }),
-      db.Campaign.findAll({
-        where: { id: campaignIds }
-      })
-    ]);
-
-    const usersMap = new Map(users.map(user => [user.id, user]));
-    const campaignsMap = new Map(campaigns.map(campaign => [campaign.id, campaign]));
-
-    // Combine the data
-    const clipsWithData = clips.map(clip => ({
-      ...clip.toJSON(),
-      user: usersMap.get(clip.UserId),
-      campaign: campaignsMap.get(clip.CampaignId)
-    }));
+    // No need for separate user/campaign fetching since we're using includes
 
     res.render('admin/clips', {
-      clips: clipsWithData,
+      clips,
       totalPages: Math.ceil(count / limit),
       currentPage: page,
       moment
@@ -241,33 +213,23 @@ router.delete('/clips/:clipId', async (req, res) => {
 
 router.get('/campaigns', async (req, res) => {
   try {
-    // First query to get all campaigns
     const campaigns = await db.Campaign.findAll({
+      include: [{
+        model: db.Clip,
+        attributes: ['id']
+      }],
       order: [['createdAt', 'DESC']]
     });
-    
-    // Second query to get users
-    const userIds = campaigns.map(campaign => campaign.UserId).filter(id => id);
-    const users = await db.User.findAll({
-      where: { id: userIds },
-      attributes: ['id', 'discordId']
-    });
-    
-    // Create a map of users for easy lookup
-    const usersMap = new Map(users.map(user => [user.id, user]));
-    
-    // Combine the data
-    const campaignsWithUsers = campaigns.map(campaign => {
-      const campaignData = campaign.toJSON();
-      campaignData.user = usersMap.get(campaign.UserId) || null;
-      return campaignData;
-    });
 
-    console.log(campaigns);
+    // Add clip count to each campaign
+    const campaignsWithData = campaigns.map(campaign => ({
+      ...campaign.toJSON(),
+      clipCount: campaign.Clips?.length || 0
+    }));
 
     res.render('admin/campaigns', { 
-      campaigns,
-      moment: moment
+      campaigns: campaignsWithData,
+      moment
     });
   } catch (error) {
     res.status(500).render('error', { error });
@@ -374,8 +336,12 @@ router.get('/dashboard/clips', async (req, res) => {
     const clips = await db.Clip.findAll({
       include: [{
         model: db.User,
-        attributes: ['discordId']
+        attributes: ['discordId', 'username']
       }],
+      attributes: [
+        'id', 'url', 'platform', 'views', 'likes', 
+        'createdAt', 'userDiscordId', 'discordGuildId'
+      ],
       order: [['createdAt', 'DESC']],
       limit: 20
     });
@@ -397,119 +363,172 @@ router.delete('/dashboard/clips/:clipId', async (req, res) => {
   }
 });
 
-// Get payment information for users
+// Update payments route to include all payment statuses
 router.get('/dashboard/payments', async (req, res) => {
   try {
-    const { campaignId } = req.query;
+    const { discordGuildId } = req.query;
     
-    // First get all users who have been paid
+    // Get all payments
     const payments = await db.Payment.findAll({
-      attributes: ['userId', 'paidAt'],
-      raw: true
+      include: [{
+        model: db.User,
+        attributes: ['discordId', 'paypalEmail']
+      }, {
+        model: db.Campaign,
+        attributes: ['name']
+      }],
+      order: [['createdAt', 'DESC']]
     });
 
-    // Get the most recent payment date for each user
-    const lastPaymentByUser = payments.reduce((acc, payment) => {
-      if (!acc[payment.userId] || new Date(payment.paidAt) > new Date(acc[payment.userId])) {
-        acc[payment.userId] = payment.paidAt;
-      }
-      return acc;
-    }, {});
+    // Get all pending payments from completed campaigns
+    const completedCampaigns = await db.Campaign.findAll({
+      where: { status: 'COMPLETED' },
+      include: [{
+        model: db.Clip,
+        include: [{
+          model: db.User,
+          attributes: ['discordId', 'paypalEmail']
+        }]
+      }]
+    });
 
-    // Get clips with views created after each user's last payment
-    const whereClause = {};
-    if (campaignId) {
-      whereClause.CampaignId = campaignId;
+    // Transform campaign data into payment records
+    const pendingPayments = completedCampaigns.flatMap(campaign => {
+      const userPayments = new Map();
+
+      // Group clips by user and calculate totals
+      campaign.Clips.forEach(clip => {
+        const userId = clip.User.discordId;
+        if (!userPayments.has(userId)) {
+          userPayments.set(userId, {
+            discordId: userId,
+            paypalEmail: clip.User.paypalEmail,
+            totalOwed: 0,
+            clipCount: 0,
+            campaigns: new Set([campaign.name]),
+            totalViews: 0,
+            status: 'PENDING',
+            amountPaid: 0,
+            createdAt: new Date(),
+            expedite: false
+          });
+        }
+
+        const payment = userPayments.get(userId);
+        payment.totalOwed = Number(payment.totalOwed) + (Number(clip.views) * Number(campaign.rate));
+        payment.clipCount++;
+        payment.totalViews += Number(clip.views);
+        payment.campaigns.add(campaign.name);
+      });
+
+      return Array.from(userPayments.values()).map(payment => ({
+        ...payment,
+        totalOwed: Number(payment.totalOwed),
+        campaigns: Array.from(payment.campaigns)
+      }));
+    });
+
+    // Transform existing payments into the required format
+    const existingPayments = payments.map(payment => ({
+      discordId: payment.userDiscordId,
+      paypalEmail: payment.User.paypalEmail,
+      totalOwed: Number(payment.amount),
+      amountPaid: payment.status === 'PAID' ? Number(payment.amount) : 0,
+      status: payment.status,
+      paymentDate: payment.paidAt,
+      paymentMethod: payment.paymentMethod,
+      expedite: payment.expedite || false,
+      createdBy: payment.createdBy,
+      paidBy: payment.paidBy,
+      campaigns: [payment.Campaign.name],
+      clipCount: payment.clipCount || 0
+    }));
+
+    // Combine and filter by campaign if specified
+    let allPayments = [...pendingPayments, ...existingPayments];
+    if (discordGuildId) {
+      allPayments = allPayments.filter(payment => 
+        payment.campaigns.some(campaign => campaign.discordGuildId === discordGuildId)
+      );
     }
 
-    const clips = await db.Clip.findAll({
-      where: whereClause,
-      attributes: ['id', 'url', 'UserId', 'CampaignId', 'createdAt', 'views'],
-      raw: true
-    });
-
-    // Filter clips to only include those after last payment
-    const unpaidClips = clips.filter(clip => {
-      const lastPayment = lastPaymentByUser[clip.UserId];
-      return !lastPayment || new Date(clip.createdAt) > new Date(lastPayment);
-    });
-
-    // Get unique user and campaign IDs
-    const userIds = [...new Set(unpaidClips.map(clip => clip.UserId))];
-    const campaignIds = [...new Set(unpaidClips.map(clip => clip.CampaignId))];
-
-    // Fetch users and campaigns
-    const [users, campaigns] = await Promise.all([
-      db.User.findAll({
-        where: { id: userIds },
-        attributes: ['id', 'discordId', 'paypalEmail'],
-        raw: true
-      }),
-      db.Campaign.findAll({
-        where: { id: campaignIds },
-        attributes: ['id', 'name', 'rate'],
-        raw: true
-      })
-    ]);
-
-    // Create lookup maps
-    const userMap = new Map(users.map(user => [user.id, user]));
-    const campaignMap = new Map(campaigns.map(campaign => [campaign.id, campaign]));
-
-    // Group clips by user and calculate totals
-    const paymentsByUser = unpaidClips.reduce((acc, clip) => {
-      const userId = clip.UserId;
-      const user = userMap.get(userId);
-      const campaign = campaignMap.get(clip.CampaignId);
-
-      if (!user || !campaign) return acc;
-
-      if (!acc[userId]) {
-        acc[userId] = {
-          userId: userId,
-          discordId: user.discordId,
-          paypalEmail: user.paypalEmail,
-          totalOwed: 0,
-          clips: [],
-          campaigns: new Set(),
-          lastPaidAt: lastPaymentByUser[userId] || null,
-          totalViews: 0
-        };
-      }
-      
-      // Calculate earnings for this clip based on views * rate
-      const clipEarnings = (clip.views || 0) * campaign.rate;
-      acc[userId].totalOwed += clipEarnings;
-      acc[userId].totalViews += (clip.views || 0);
-      
-      acc[userId].clips.push({
-        id: clip.id,
-        url: clip.url,
-        campaignName: campaign.name,
-        rate: campaign.rate,
-        views: clip.views || 0,
-        earnings: clipEarnings,
-        createdAt: clip.createdAt
-      });
-      acc[userId].campaigns.add(campaign.name);
-      
-      return acc;
-    }, {});
-
-    // Convert to array and format campaigns
-    const paymentData = Object.values(paymentsByUser)
-      .filter(payment => payment.totalOwed > 0) // Only include users with unpaid earnings
-      .map(payment => ({
-        ...payment,
-        campaigns: Array.from(payment.campaigns),
-        clipCount: payment.clips.length,
-        totalOwed: Number(payment.totalOwed.toFixed(4)) // Round to 2 decimal places
-      }));
-
-    res.json(paymentData);
+    res.json(allPayments);
   } catch (error) {
     console.error('Error fetching payment data:', error);
     res.status(500).json({ error: 'Failed to fetch payment data' });
+  }
+});
+
+// Add route to update payment status
+router.patch('/dashboard/payments/:paymentId', async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const { status, paymentMethod, expedite } = req.body;
+
+    const payment = await db.Payment.findByPk(paymentId);
+    if (!payment) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    const updates = {
+      status,
+      paymentMethod,
+      expedite,
+      paidAt: status === 'PAID' ? new Date() : null,
+      paidBy: status === 'PAID' ? req.user?.discordId : null // Assuming you have user info in req
+    };
+
+    await payment.update(updates);
+
+    res.json({ success: true, payment });
+  } catch (error) {
+    console.error('Error updating payment:', error);
+    res.status(500).json({ error: 'Failed to update payment' });
+  }
+});
+
+// Add route to create new payment
+router.post('/dashboard/payments', async (req, res) => {
+  try {
+    const { userDiscordId, discordGuildId, amount, paymentMethod, expedite } = req.body;
+
+    const payment = await db.Payment.create({
+      userDiscordId,
+      discordGuildId,
+      amount,
+      status: 'PENDING',
+      paymentMethod,
+      expedite,
+      createdBy: req.user?.discordId // Assuming you have user info in req
+    });
+
+    res.json({ success: true, payment });
+  } catch (error) {
+    console.error('Error creating payment:', error);
+    res.status(500).json({ error: 'Failed to create payment' });
+  }
+});
+
+// Add route to bulk update payments
+router.post('/dashboard/payments/bulk', async (req, res) => {
+  try {
+    const { paymentIds, status, paymentMethod } = req.body;
+
+    await db.Payment.update({
+      status,
+      paymentMethod,
+      paidAt: status === 'PAID' ? new Date() : null,
+      paidBy: status === 'PAID' ? req.user?.discordId : null
+    }, {
+      where: {
+        id: paymentIds
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error bulk updating payments:', error);
+    res.status(500).json({ error: 'Failed to update payments' });
   }
 });
 
@@ -517,7 +536,7 @@ router.get('/dashboard/payments', async (req, res) => {
 router.get('/dashboard/payment-campaigns', async (req, res) => {
   try {
     const campaigns = await db.Campaign.findAll({
-      attributes: ['id', 'name'],
+      attributes: ['discordGuildId', 'name'],
       where: { status: 'ACTIVE' },
       raw: true
     });
@@ -525,6 +544,59 @@ router.get('/dashboard/payment-campaigns', async (req, res) => {
   } catch (error) {
     console.error('Error fetching campaigns:', error);
     res.status(500).json({ error: 'Failed to fetch campaigns' });
+  }
+});
+
+// Add this near your other routes
+router.post('/test/campaign-payout/:campaignId', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const results = await testCampaignPayouts(campaignId);
+    res.json(results);
+  } catch (error) { 
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update the route to use discordGuildId
+router.get('/dashboard/payment-clips/:discordId/:discordGuildId', async (req, res) => {
+  try {
+    const { discordId, discordGuildId } = req.params;
+    
+    // Get the campaign first to get the name
+    const campaign = await db.Campaign.findOne({
+      where: { discordGuildId }
+    });
+    
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+    
+    const clips = await db.Clip.findAll({
+      where: {
+        userDiscordId: discordId,
+        discordGuildId
+      },
+      order: [['createdAt', 'DESC']]
+    });
+
+    // Transform clips to include earnings calculation
+    const clipsWithEarnings = clips.map(clip => ({
+      id: clip.id,
+      url: clip.url,
+      views: clip.views,
+      rate: campaign.rate,
+      earnings: clip.views * campaign.rate,
+      createdAt: clip.createdAt
+    }));
+
+    res.json({
+      campaignName: campaign.name,
+      clips: clipsWithEarnings
+    });
+  } catch (error) {
+    console.error('Error fetching payment clips:', error);
+    res.status(500).json({ error: 'Failed to fetch payment clips' });
   }
 });
 

@@ -19,9 +19,7 @@ export default async function handleAddPaypal(req, res, member, options) {
 
   try {
     // First check if user exists
-    const user = await db.User.findOne({
-      where: { discordId: member.user.id }
-    });
+    const user = await db.User.findByPk(member.user.id);
 
     if (!user) {
       return res.send({

@@ -2,14 +2,9 @@ import { DataTypes } from 'sequelize';
 
 export default (sequelize) => {
   const User = sequelize.define('User', {
-    id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true
-    },
     discordId: {
       type: DataTypes.STRING,
-      unique: true,
+      primaryKey: true,
       allowNull: false
     },
     isVerified: {
@@ -26,6 +21,14 @@ export default (sequelize) => {
     },
     paypalEmail: {
       type: DataTypes.STRING,
+      allowNull: true
+    },
+    username: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    joinedAt: {
+      type: DataTypes.DATE,
       allowNull: true
     }
   });

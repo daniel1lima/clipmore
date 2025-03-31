@@ -8,9 +8,7 @@ export default async function handleAddAccount(req, res, member, options) {
   const username = options.find(opt => opt.name === 'username').value;
   
   try {
-    const user = await db.User.findOne({
-      where: { discordId: member.user.id }
-    });
+    const user = await db.User.findByPk(member.user.id);
 
     if (!user) {
       return res.send({
@@ -46,7 +44,7 @@ export default async function handleAddAccount(req, res, member, options) {
     const verificationCode = crypto.randomBytes(4).toString('hex');
     
     const account = await db.SocialMediaAccount.create({
-      UserId: user.id,
+      userDiscordId: user.discordId,
       platform,
       username,
       verificationCode,

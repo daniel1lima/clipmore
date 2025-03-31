@@ -15,10 +15,11 @@ interface DashboardStats {
 }
 
 interface Campaign {
-  id: string;
+  discordGuildId: string;
   name: string;
   createdAt: string;
   totalViews: number;
+  totalLikes: number;
   maxPayout: number;
   rate: number;
   status: string;
@@ -34,12 +35,15 @@ interface Log {
 }
 
 interface Clip {
-  id: string;
+  id: number;
   url: string;
+  platform: 'INSTAGRAM' | 'TIKTOK' | 'YOUTUBE' | 'X';
   createdAt: string;
   views: number;
-  user?: {
+  likes: number;
+  User?: {
     discordId: string;
+    username: string;
   };
 }
 
@@ -104,7 +108,7 @@ export default function Dashboard() {
 
     try {
       await dashboardApi.deleteClip(clipId);
-      setClips(clips.filter(clip => clip.id !== clipId));
+      setClips(clips.filter(clip => clip.id.toString() !== clipId));
     } catch (error) {
       console.error('Error deleting clip:', error);
       alert('Failed to delete clip');
@@ -152,11 +156,12 @@ export default function Dashboard() {
           <h2 className="text-2xl font-bold mb-4">Active Campaigns</h2>
           <div className="bg-gray-800 rounded-lg overflow-hidden">
             {campaigns.map(campaign => (
-              <div key={campaign.id} className="p-4 border-b border-gray-700">
+              <div key={campaign.discordGuildId} className="p-4 border-b border-gray-700">
                 <h3 className="font-bold text-lg">{campaign.name}</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2 text-sm">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-2 text-sm">
                   <div>Created: {moment(campaign.createdAt).format('YYYY-MM-DD')}</div>
                   <div>Views: {campaign.totalViews}</div>
+                  <div>Likes: {campaign.totalLikes}</div>
                   <div>Max Payout: ${campaign.maxPayout.toFixed(2)}</div>
                   <div>Status: {campaign.status}</div>
                 </div>
@@ -220,16 +225,19 @@ export default function Dashboard() {
               <thead className="bg-gray-700">
                 <tr>
                   <th className="px-4 py-2 text-left">User</th>
+                  <th className="px-4 py-2 text-left">Platform</th>
                   <th className="px-4 py-2 text-left">URL</th>
                   <th className="px-4 py-2 text-left">Created</th>
                   <th className="px-4 py-2 text-left">Views</th>
+                  <th className="px-4 py-2 text-left">Likes</th>
                   <th className="px-4 py-2 text-left">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {clips.map(clip => (
                   <tr key={clip.id} className="border-b border-gray-700">
-                    <td className="px-4 py-2">{clip.user?.discordId || 'Unknown'}</td>
+                    <td className="px-4 py-2">{clip.User?.username || 'Unknown'}</td>
+                    <td className="px-4 py-2">{clip.platform}</td>
                     <td className="px-4 py-2">
                       <a href={clip.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
                         View
@@ -237,9 +245,10 @@ export default function Dashboard() {
                     </td>
                     <td className="px-4 py-2">{moment(clip.createdAt).format('YYYY-MM-DD HH:mm:ss')}</td>
                     <td className="px-4 py-2">{clip.views}</td>
+                    <td className="px-4 py-2">{clip.likes}</td>
                     <td className="px-4 py-2">
                       <button
-                        onClick={() => handleDeleteClip(clip.id)}
+                        onClick={() => handleDeleteClip(clip.id.toString())}
                         className="bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-sm"
                       >
                         Delete

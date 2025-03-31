@@ -6,9 +6,7 @@ export async function handleMyAccounts(req, res, member) {
     const discordId = member.user.id;
     
     // Find user and include their social media accounts
-    const user = await db.User.findOne({
-      where: { discordId }
-    });
+    const user = await db.User.findByPk(discordId);
 
     if (!user) {
       return res.send({
@@ -21,7 +19,7 @@ export async function handleMyAccounts(req, res, member) {
     }
 
     const socialMediaAccounts = await db.SocialMediaAccount.findAll({
-      where: { UserId: user.id }
+      where: { userDiscordId: user.discordId }
     });
 
     // Group accounts by platform

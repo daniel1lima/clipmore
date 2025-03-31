@@ -16,9 +16,7 @@ export default async function handleUpload(req, res, member, options, guild) {
   });
 
   try {
-    const user = await db.User.findOne({
-      where: { discordId: member.user.id },
-    });
+    const user = await db.User.findByPk(member.user.id);
 
     // Check if user exists first
     if (!user) {
@@ -27,11 +25,7 @@ export default async function handleUpload(req, res, member, options, guild) {
     }
 
     // ACTIVE CAMPAIGN ONLY
-    const activeCampaign = await db.Campaign.findOne({
-      where: {
-        discordGuildId: guild.id,
-      }
-    });
+    const activeCampaign = await db.Campaign.findByPk(guild.id);
 
     if (!activeCampaign) {
       sendDM(member.user.id, MessageTemplates.noCampaignFound());
@@ -44,7 +38,7 @@ export default async function handleUpload(req, res, member, options, guild) {
     }
 
     const socialMediaAccounts = await db.SocialMediaAccount.findAll({
-      where: { UserId: user.id, isVerified: true }
+      where: { userDiscordId: user.discordId, isVerified: true }
     });
 
     if (!user || !socialMediaAccounts.length) {
@@ -115,14 +109,14 @@ export default async function handleUpload(req, res, member, options, guild) {
         const [clip, created] = await db.Clip.findOrCreate({
           where: {
             url,
-            SocialMediaAccountId: account.id,
+            socialMediaAccountId: account.id,
           },
           defaults: {
             platform,
             views: metadata.views,
             likes: metadata.likes,
-            CampaignId: activeCampaign.id,
-            UserId: user.id,
+            discordGuildId: activeCampaign.discordGuildId,
+            userDiscordId: user.discordId,
           }
         });
         

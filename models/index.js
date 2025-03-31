@@ -29,23 +29,53 @@ const db = {
   Log: LogModel(sequelize)
 };
 
-// Setup associations
-db.User.hasMany(db.SocialMediaAccount);
-db.SocialMediaAccount.belongsTo(db.User);
+// Setup associations with explicit foreign key names
+db.User.hasMany(db.SocialMediaAccount, {
+  foreignKey: 'userDiscordId'  // This forces the camelCase naming
+});
+db.SocialMediaAccount.belongsTo(db.User, {
+  foreignKey: 'userDiscordId'
+});
 
-db.SocialMediaAccount.hasMany(db.Clip);
-db.Clip.belongsTo(db.SocialMediaAccount);
+db.SocialMediaAccount.hasMany(db.Clip, {
+  foreignKey: 'socialMediaAccountId'
+});
+db.Clip.belongsTo(db.SocialMediaAccount, {
+  foreignKey: 'socialMediaAccountId'
+});
 
 // Add direct User-Clip association
-db.User.hasMany(db.Clip);
-db.Clip.belongsTo(db.User);
+db.User.hasMany(db.Clip, {
+  foreignKey: 'userDiscordId'
+});
 
-db.User.hasMany(db.Payment);
-db.Payment.belongsTo(db.User);
+db.Clip.belongsTo(db.User, {
+  foreignKey: 'userDiscordId'
+});
+
+// Add Campaign-Payment association
+db.Campaign.hasMany(db.Payment, {
+  foreignKey: 'discordGuildId'
+});
+db.Payment.belongsTo(db.Campaign, {
+  foreignKey: 'discordGuildId'
+});
+
+// User-Payment association (already exists)
+db.User.hasMany(db.Payment, {
+  foreignKey: 'userDiscordId'
+});
+db.Payment.belongsTo(db.User, {
+  foreignKey: 'userDiscordId'
+});
 
 // Add Campaign-Clip association
-db.Campaign.hasMany(db.Clip);
-db.Clip.belongsTo(db.Campaign);
+db.Campaign.hasMany(db.Clip, {
+  foreignKey: 'discordGuildId'
+});
+db.Clip.belongsTo(db.Campaign, {
+  foreignKey: 'discordGuildId'
+});
 
 // Test connection and sync models
 sequelize.authenticate()

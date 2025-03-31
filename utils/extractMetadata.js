@@ -333,12 +333,96 @@ async function extractXMetadata(url) {
   });
 }
 
-/**
- * Updates metadata for all clips and their associated campaigns
- * @returns {Promise<Object>} Results of the update operation
- */
+async function handleCampaignUpdate(campaign, clips) {
+  const newTotalViews = clips.reduce((sum, clip) => sum + clip.views, 0);
+  const potentialEarnings = newTotalViews * campaign.rate;
+  const oldTotalViews = campaign.totalViews;
+  const viewDiff = newTotalViews - oldTotalViews;
+  const progressPercentage = (potentialEarnings / campaign.maxPayout) * 100;
+
+  console.log(
+    `Campaign ID: ${campaign.discordGuildId}\n` +
+    `Name: ${campaign.name}\n` +
+    `Status: ${campaign.status}\n` +
+    `Total Views: ${oldTotalViews.toLocaleString()} → ${newTotalViews.toLocaleString()} (${viewDiff >= 0 ? '+' : ''}${viewDiff.toLocaleString()})\n` +
+    `Earnings: $${potentialEarnings.toFixed(2)} / $${campaign.maxPayout}\n` +
+    `${'-'.repeat(50)}`
+  );
+
+  if (campaign.status === 'ACTIVE' && newTotalViews !== oldTotalViews) {
+    await campaign.update({
+      totalViews: newTotalViews
+    });
+
+    await Logger.log(LogLevel.INFO, LogCategory.CAMPAIGN, 
+      'Campaign update', {
+        campaignId: campaign.discordGuildId,
+        totalViews: newTotalViews,
+        metadata: clips
+      }
+    );
+
+    // Check if campaign has reached max payout
+    if (campaign.maxPayout && potentialEarnings >= campaign.maxPayout) {
+      // Group clips by user for payment entries
+      const userClips = clips.reduce((acc, clip) => {
+        if (!acc[clip.userDiscordId]) {
+          acc[clip.userDiscordId] = {
+            clips: [],
+            totalViews: 0,
+            amount: 0
+          };
+        }
+        acc[clip.userDiscordId].clips.push(clip);
+        acc[clip.userDiscordId].totalViews += clip.views;
+        acc[clip.userDiscordId].amount += clip.views * campaign.rate;
+        return acc;
+      }, {});
+
+      // Create payment entries for each user
+      const paymentPromises = Object.entries(userClips).map(([userDiscordId, data]) => {
+        return db.Payment.create({
+          userDiscordId,
+          discordGuildId: campaign.discordGuildId,
+          amount: data.amount,
+          totalViews: data.totalViews,
+          clipCount: data.clips.length,
+          status: 'PENDING'
+        });
+      });
+
+      await Promise.all([
+        // Update campaign status
+        campaign.update({
+          status: 'COMPLETED',
+          endDate: new Date()
+        }),
+        // Create payment entries
+        ...paymentPromises
+      ]);
+
+      await Logger.log(LogLevel.AUDIT, LogCategory.CAMPAIGN, 
+        'Campaign completed - Max payout reached', {
+          campaignId: campaign.discordGuildId,
+          totalEarnings: potentialEarnings,
+          maxPayout: campaign.maxPayout,
+          totalUsers: Object.keys(userClips).length
+        }
+      );
+    }
+  }
+
+  return {
+    campaignId: campaign.discordGuildId,
+    name: campaign.name,
+    progressPercentage,
+    totalViews: newTotalViews,
+    potentialEarnings
+  };
+}
+
 export async function updateClipsMetadata() {
-  const ERROR_THRESHOLD = 3; // Define a threshold for consecutive errors
+  const ERROR_THRESHOLD = 3;
 
   try {
     const campaignClips = new Map();
@@ -346,7 +430,7 @@ export async function updateClipsMetadata() {
       success: 0,
       failed: 0,
       errors: [],
-      viewUpdates: []
+      campaignUpdates: []
     };
 
     const clips = await db.Clip.findAll();
@@ -355,6 +439,7 @@ export async function updateClipsMetadata() {
       `Starting metadata update for ${clips.length} clips`
     );
 
+    // Process clips and group by campaign
     for (const clip of clips) {
       try {
         const oldViews = clip.views;
@@ -364,26 +449,14 @@ export async function updateClipsMetadata() {
           views: metadata.views,
           likes: metadata.likes,
           lastMetadataUpdate: new Date(),
-          consecutiveErrors: 0 // Reset error counter on success
+          consecutiveErrors: 0
         });
 
-        const viewDiff = metadata.views - oldViews;
-        
-        await Logger.log(LogLevel.INFO, LogCategory.CLIP, 'Clip metadata updated', {
-          clipId: clip.id,
-          url: clip.url,
-          oldViews,
-          newViews: metadata.views,
-          viewDiff,
-          campaignId: clip.CampaignId
-        });
-
-        // Group clips by campaign
-        if (clip.CampaignId) {
-          if (!campaignClips.has(clip.CampaignId)) {
-            campaignClips.set(clip.CampaignId, []);
+        if (clip.discordGuildId) {
+          if (!campaignClips.has(clip.discordGuildId)) {
+            campaignClips.set(clip.discordGuildId, []);
           }
-          campaignClips.get(clip.CampaignId).push(clip);
+          campaignClips.get(clip.discordGuildId).push(clip);
         }
 
         results.success++;
@@ -420,80 +493,22 @@ export async function updateClipsMetadata() {
       }
     }
 
-    // Fetch all campaigns to ensure all are included in the status
+    // Process all campaigns
     const allCampaigns = await db.Campaign.findAll();
     const campaignStatuses = [];
 
     for (const campaign of allCampaigns) {
-      const clips = campaignClips.get(campaign.id) || [];
-      const newTotalViews = clips.reduce((sum, clip) => sum + clip.views, 0);
-      const progressPercentage = (newTotalViews / campaign.maxPayout) * 100;
-      campaignStatuses.push(`${campaign.name}: ${progressPercentage.toFixed(2)}%`);
-
-      if (clips.length > 0) {
-        const oldTotalViews = campaign.totalViews;
-        const viewDiff = newTotalViews - oldTotalViews;
-        const potentialEarnings = newTotalViews * campaign.rate;
-
-        console.log(
-          `Campaign ID: ${campaign.id}\n` +
-          `Name: ${campaign.name}\n` +
-          `Status: ${campaign.status}\n` +
-          `Total Views: ${oldTotalViews.toLocaleString()} → ${newTotalViews.toLocaleString()} (${viewDiff >= 0 ? '+' : ''}${viewDiff.toLocaleString()})\n` +
-          `Earnings: $${potentialEarnings.toFixed(2)} / $${campaign.maxPayout}\n` +
-          `${'-'.repeat(50)}`
-        );
-
-        if (campaign.status === 'ACTIVE' && newTotalViews !== oldTotalViews) {
-          await campaign.update({
-            totalViews: newTotalViews
-          });
-
-          await Logger.log(LogLevel.INFO, LogCategory.CAMPAIGN, 
-            'Campaign update', {
-              campaignId: campaign.id,
-              totalViews: newTotalViews
-            }
-          );
-
-          if (campaign.maxPayout && potentialEarnings >= campaign.maxPayout - 100) {
-            await Logger.log(LogLevel.WARNING, LogCategory.CAMPAIGN, 
-              'Campaign approaching max payout - Auto-paused', {
-                campaignId: campaign.id,
-                currentEarnings: potentialEarnings,
-                maxPayout: campaign.maxPayout
-              }
-            );
-            
-            await campaign.update({
-              status: 'PAUSED',
-              updatedAt: new Date()
-            });
-          }
-        }
-      }
+      const campaignClipsList = campaignClips.get(campaign.discordGuildId) || [];
+      const status = await handleCampaignUpdate(campaign, campaignClipsList);
+      campaignStatuses.push(`${status.name}: ${status.progressPercentage.toFixed(2)}%`);
+      results.campaignUpdates.push(status);
     }
 
-    // Update bot status with all campaigns' progress
+    // Update bot status
     const statusMessage = campaignStatuses.join(' | ');
     await updateBotDescription('all', statusMessage);
 
-    // Final summary
-    console.log('\n📊 Update Summary:\n' + '-'.repeat(50));
-    console.log(`Total Clips Processed: ${clips.length}`);
-    console.log(`Successful Updates: ${results.success}`);
-    console.log(`Failed Updates: ${results.failed}`);
-    console.log(`Campaigns Updated: ${campaignClips.size}`);
-    console.log('-'.repeat(50) + '\n');
-
-    return {
-      ...results,
-      campaignsUpdated: Array.from(campaignClips.entries()).map(([id, clips]) => ({
-        campaignId: id,
-        totalViews: clips.reduce((sum, clip) => sum + clip.views, 0)
-      })),
-      viewUpdates: results.viewUpdates
-    };
+    return results;
   } catch (error) {
     await Logger.log(LogLevel.ERROR, LogCategory.SYSTEM, 
       'Metadata update process failed', {
@@ -523,6 +538,95 @@ async function updateBotDescription(campaignId, description) {
     console.log(`Bot status updated for campaign ${campaignId}: ${description}`);
   } catch (error) {
     console.error(`Failed to update bot status for campaign ${campaignId}: ${error.message}`);
+  }
+}
+
+// Add this test function at the bottom of the file
+export async function testCampaignPayouts(campaignId) {
+  try {
+    // 1. Find the campaign
+    const campaign = await db.Campaign.findOne({
+      where: { discordGuildId: campaignId }
+    });
+
+    if (!campaign) {
+      throw new Error(`Campaign ${campaignId} not found`);
+    }
+
+    console.log('\n🧪 Testing Campaign Payout System');
+    console.log('-'.repeat(50));
+    console.log(`Campaign: ${campaign.name}`);
+    console.log(`Current Status: ${campaign.status}`);
+    console.log(`Max Payout: $${campaign.maxPayout}`);
+    console.log(`Rate per view: $${campaign.rate}`);
+
+    // 2. Get all clips for this campaign
+    const clips = await db.Clip.findAll({
+      where: { discordGuildId: campaignId },
+      include: [{
+        model: db.User,
+        attributes: ['discordId', 'username']
+      }]
+    });
+
+    console.log(`Total Clips: ${clips.length}`);
+
+    // 3. Simulate reaching max payout by temporarily updating views
+    const viewsNeededForMax = Math.ceil(campaign.maxPayout / campaign.rate);
+    const viewsPerClip = Math.ceil(viewsNeededForMax / clips.length);
+
+    console.log('\n📊 Simulating Views Update:');
+    console.log(`Views needed for max payout: ${viewsNeededForMax}`);
+    console.log(`Views per clip: ${viewsPerClip}`);
+
+    // 4. Update clips with simulated views
+    for (const clip of clips) {
+      await clip.update({ views: viewsPerClip });
+    }
+
+    // 5. Run the metadata update
+    console.log('\n🔄 Running metadata update...');
+    const results = await handleCampaignUpdate(campaign, clips);
+
+    // 6. Check the results
+    console.log('\n📝 Results:');
+    console.log(`Campaign Status: ${(await db.Campaign.findByPk(campaign.discordGuildId)).status}`);
+    
+    // 7. Check payment entries
+    const payments = await db.Payment.findAll({
+      where: { discordGuildId: campaignId }
+    });
+
+    console.log('\n💰 Payment Entries Created:');
+    for (const payment of payments) {
+      console.log(`- User ${payment.userDiscordId}:`);
+      console.log(`  Amount: $${payment.amount}`);
+      console.log(`  Views: ${payment.totalViews}`);
+      console.log(`  Clips: ${payment.clipCount}`);
+      console.log(`  Status: ${payment.status}`);
+      console.log('-'.repeat(30));
+    }
+
+    // 8. Cleanup - reset views to original values
+    console.log('\n🧹 Cleaning up test data...');
+    for (const clip of clips) {
+      await clip.update({ views: 0 });
+    }
+    
+    // Reset campaign status if needed
+    if (campaign.status === 'COMPLETED') {
+      await campaign.update({ 
+        status: 'ACTIVE',
+        endDate: null
+      });
+    }
+
+    console.log('\n✅ Test completed successfully!');
+    return { success: true, payments };
+
+  } catch (error) {
+    console.error('\n❌ Test failed:', error);
+    return { success: false, error: error.message };
   }
 }
 
