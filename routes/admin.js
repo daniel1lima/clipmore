@@ -363,75 +363,40 @@ router.delete('/dashboard/clips/:clipId', async (req, res) => {
   }
 });
 
-// Update payments route to include all payment statuses
+// Clean up the payments listing endpoint to use associations
 router.get('/dashboard/payments', async (req, res) => {
   try {
     const { discordGuildId } = req.query;
     
-    // Get all payments
+    // Build where clause for payments if filtering by campaign
+    const whereClause = discordGuildId ? { discordGuildId } : {};
+    
+    // Get all payments with their related data
     const payments = await db.Payment.findAll({
-      include: [{
-        model: db.User,
-        attributes: ['discordId', 'paypalEmail']
-      }, {
-        model: db.Campaign,
-        attributes: ['name']
-      }],
+      where: whereClause,
+      include: [
+        {
+          model: db.User,
+          attributes: ['discordId', 'paypalEmail', 'username']
+        },
+        {
+          model: db.Campaign,
+          attributes: ['name', 'discordGuildId', 'status']
+        },
+        {
+          model: db.Clip,
+          attributes: ['id', 'url', 'views', 'likes']
+        }
+      ],
       order: [['createdAt', 'DESC']]
     });
 
-    // Get all pending payments from completed campaigns
-    const completedCampaigns = await db.Campaign.findAll({
-      where: { status: 'COMPLETED' },
-      include: [{
-        model: db.Clip,
-        include: [{
-          model: db.User,
-          attributes: ['discordId', 'paypalEmail']
-        }]
-      }]
-    });
-
-    // Transform campaign data into payment records
-    const pendingPayments = completedCampaigns.flatMap(campaign => {
-      const userPayments = new Map();
-
-      // Group clips by user and calculate totals
-      campaign.Clips.forEach(clip => {
-        const userId = clip.User.discordId;
-        if (!userPayments.has(userId)) {
-          userPayments.set(userId, {
-            discordId: userId,
-            paypalEmail: clip.User.paypalEmail,
-            totalOwed: 0,
-            clipCount: 0,
-            campaigns: new Set([campaign.name]),
-            totalViews: 0,
-            status: 'PENDING',
-            amountPaid: 0,
-            createdAt: new Date(),
-            expedite: false
-          });
-        }
-
-        const payment = userPayments.get(userId);
-        payment.totalOwed = Number(payment.totalOwed) + (Number(clip.views) * Number(campaign.rate));
-        payment.clipCount++;
-        payment.totalViews += Number(clip.views);
-        payment.campaigns.add(campaign.name);
-      });
-
-      return Array.from(userPayments.values()).map(payment => ({
-        ...payment,
-        totalOwed: Number(payment.totalOwed),
-        campaigns: Array.from(payment.campaigns)
-      }));
-    });
-
-    // Transform existing payments into the required format
-    const existingPayments = payments.map(payment => ({
+    // Transform data for frontend
+    const formattedPayments = payments.map(payment => ({
+      id: payment.id,  // Make sure to include the payment ID for updates
       discordId: payment.userDiscordId,
-      paypalEmail: payment.User.paypalEmail,
+      discordGuildId: payment.discordGuildId,
+      paypalEmail: payment.User?.paypalEmail || '',
       totalOwed: Number(payment.amount),
       amountPaid: payment.status === 'PAID' ? Number(payment.amount) : 0,
       status: payment.status,
@@ -440,26 +405,24 @@ router.get('/dashboard/payments', async (req, res) => {
       expedite: payment.expedite || false,
       createdBy: payment.createdBy,
       paidBy: payment.paidBy,
-      campaigns: [payment.Campaign.name],
-      clipCount: payment.clipCount || 0
+      createdAt: payment.createdAt,
+      campaign: payment.Campaign?.name || 'Unknown Campaign',
+      clipCount: payment.Clips?.length || payment.clipCount || 0,
+      username: payment.User?.username || 'Unknown User'
     }));
 
-    // Combine and filter by campaign if specified
-    let allPayments = [...pendingPayments, ...existingPayments];
-    if (discordGuildId) {
-      allPayments = allPayments.filter(payment => 
-        payment.campaigns.some(campaign => campaign.discordGuildId === discordGuildId)
-      );
-    }
+    // For campaigns that are completed but don't have payments yet,
+    // we don't need to handle that here anymore since you're creating
+    // payments at the time campaign completes
 
-    res.json(allPayments);
+    res.json(formattedPayments);
   } catch (error) {
     console.error('Error fetching payment data:', error);
     res.status(500).json({ error: 'Failed to fetch payment data' });
   }
 });
 
-// Add route to update payment status
+// Update payment status and handle clips relationship
 router.patch('/dashboard/payments/:paymentId', async (req, res) => {
   try {
     const { paymentId } = req.params;
@@ -475,10 +438,29 @@ router.patch('/dashboard/payments/:paymentId', async (req, res) => {
       paymentMethod,
       expedite,
       paidAt: status === 'PAID' ? new Date() : null,
-      paidBy: status === 'PAID' ? req.user?.discordId : null // Assuming you have user info in req
+      paidBy: status === 'PAID' ? req.user?.discordId : null
     };
 
     await payment.update(updates);
+
+    // If the payment status changed to PAID, make sure all the clips are associated
+    if (status === 'PAID') {
+      // Find any clips that should be associated with this payment but aren't yet
+      const unassociatedClips = await db.Clip.findAll({
+        where: {
+          userDiscordId: payment.userDiscordId,
+          discordGuildId: payment.discordGuildId,
+          paymentId: null
+        }
+      });
+      
+      if (unassociatedClips.length > 0) {
+        await db.Clip.update(
+          { paymentId: payment.id },
+          { where: { id: unassociatedClips.map(clip => clip.id) } }
+        );
+      }
+    }
 
     res.json({ success: true, payment });
   } catch (error) {
@@ -558,30 +540,71 @@ router.post('/test/campaign-payout/:campaignId', async (req, res) => {
   }
 });
 
-// Update the route to use discordGuildId
+// Simplified route to get clips for a payment
 router.get('/dashboard/payment-clips/:discordId/:discordGuildId', async (req, res) => {
   try {
     const { discordId, discordGuildId } = req.params;
     
-    // Get the campaign first to get the name
-    const campaign = await db.Campaign.findOne({
-      where: { discordGuildId }
-    });
-    
+    // Get the campaign info
+    const campaign = await db.Campaign.findByPk(discordGuildId);
     if (!campaign) {
       return res.status(404).json({ error: 'Campaign not found' });
     }
     
-    const clips = await db.Clip.findAll({
+    // Find the payment with all its associated clips in one query
+    const payment = await db.Payment.findOne({
       where: {
         userDiscordId: discordId,
         discordGuildId
       },
-      order: [['createdAt', 'DESC']]
+      include: [{
+        model: db.Clip,
+        order: [['createdAt', 'DESC']]
+      }]
     });
+    
+    if (!payment) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+    
+    // If payment exists but no clips are associated with it
+    if (!payment.Clips || payment.Clips.length === 0) {
+      // Find clips by user and campaign as fallback
+      const fallbackClips = await db.Clip.findAll({
+        where: {
+          userDiscordId: discordId,
+          discordGuildId
+        },
+        order: [['createdAt', 'DESC']]
+      });
+      
+      // Transform clips for response
+      const clipsWithEarnings = fallbackClips.map(clip => ({
+        id: clip.id,
+        url: clip.url,
+        views: clip.views,
+        rate: campaign.rate,
+        earnings: clip.views * campaign.rate,
+        createdAt: clip.createdAt
+      }));
+      
+      // Update clips with payment association
+      if (fallbackClips.length > 0) {
+        await db.Clip.update(
+          { paymentId: payment.id },
+          { where: { id: fallbackClips.map(clip => clip.id) } }
+        );
+      }
 
-    // Transform clips to include earnings calculation
-    const clipsWithEarnings = clips.map(clip => ({
+      return res.json({
+        campaignName: campaign.name,
+        clips: clipsWithEarnings,
+        note: "Associated clips with payment"
+      });
+    }
+    
+    // Transform clips with earnings calculation
+    const clipsWithEarnings = payment.Clips.map(clip => ({
       id: clip.id,
       url: clip.url,
       views: clip.views,

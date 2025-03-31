@@ -61,6 +61,14 @@ db.Payment.belongsTo(db.Campaign, {
   foreignKey: 'discordGuildId'
 });
 
+// Payment-Clip association
+db.Payment.hasMany(db.Clip, {
+  foreignKey: 'paymentId'
+});
+db.Clip.belongsTo(db.Payment, {
+  foreignKey: 'paymentId'
+});
+
 // User-Payment association (already exists)
 db.User.hasMany(db.Payment, {
   foreignKey: 'userDiscordId'
@@ -81,10 +89,11 @@ db.Clip.belongsTo(db.Campaign, {
 sequelize.authenticate()
   .then(() => {
     console.log('Database connection has been established successfully.');
+    // Force a schema check and update with force: false to preserve data
     return sequelize.sync({ alter: true });
   })
   .then(() => {
-    console.log('Database & tables created!');
+    console.log('Database & tables created or updated!');
   })
   .catch((err) => {
     console.error('Error:', err);

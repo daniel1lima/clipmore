@@ -45,11 +45,13 @@ interface ClipBreakdown {
 }
 
 export interface PaymentUser {
+  id?: number;
+  username: string;
   discordId: string;
   paypalEmail: string;
   totalOwed: number;
   clipCount: number;
-  campaigns: string[];
+  campaign: string;
   status: 'PENDING' | 'PAID' | 'FAILED';
   amountPaid: number;
   paymentDate?: string;

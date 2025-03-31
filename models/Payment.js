@@ -70,6 +70,7 @@ export default (sequelize) => {
   Payment.associate = (models) => {
     Payment.belongsTo(models.User, { foreignKey: 'userDiscordId' });
     Payment.belongsTo(models.Campaign, { foreignKey: 'discordGuildId' });
+    Payment.hasMany(models.Clip, { foreignKey: 'paymentId' });
   };
 
   return Payment;

@@ -47,6 +47,14 @@ export default (sequelize) => {
         model: 'Campaigns',
         key: 'discordGuildId'
       }
+    },
+    paymentId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'Payments',
+        key: 'id'
+      }
     }
   });
 

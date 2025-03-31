@@ -380,8 +380,9 @@ async function handleCampaignUpdate(campaign, clips) {
       }, {});
 
       // Create payment entries for each user
-      const paymentPromises = Object.entries(userClips).map(([userDiscordId, data]) => {
-        return db.Payment.create({
+      const paymentPromises = Object.entries(userClips).map(async ([userDiscordId, data]) => {
+        // Create the payment
+        const payment = await db.Payment.create({
           userDiscordId,
           discordGuildId: campaign.discordGuildId,
           amount: data.amount,
@@ -389,6 +390,19 @@ async function handleCampaignUpdate(campaign, clips) {
           clipCount: data.clips.length,
           status: 'PENDING'
         });
+        
+        // Then update all clips for this user to set the paymentId
+        await db.Clip.update(
+          { paymentId: payment.id },
+          { 
+            where: { 
+              id: data.clips.map(clip => clip.id),
+              paymentId: null // Only update clips not already assigned to a payment
+            } 
+          }
+        );
+        
+        return payment;
       });
 
       await Promise.all([
