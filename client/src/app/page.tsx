@@ -1,6 +1,18 @@
-import { SignIn } from "@clerk/nextjs";
+"use client";
+
+import { SignIn, useUser } from "@clerk/nextjs";
+import { redirect } from "next/navigation";
 
 export default function SignInPage() {
+  const { isLoaded, isSignedIn } = useUser();
+  
+  if (!isLoaded) {
+    return <div>Loading...</div>;
+  }
+
+  if (isSignedIn) {
+    redirect("/dashboard");
+  }
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gray-900">
       <div className="w-full max-w-md p-8">

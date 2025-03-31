@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Calendar,
   CreditCard,
@@ -18,12 +20,14 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "./ui/button";
 import { SignOutButton } from "@clerk/nextjs";
+import { redirect } from "next/navigation";
 
 // Menu items.
 const items = [
@@ -60,6 +64,16 @@ const items = [
 ];
 
 export function AppSidebar() {
+  const {
+    state,
+    open,
+    setOpen,
+    openMobile,
+    setOpenMobile,
+    isMobile,
+    toggleSidebar,
+  } = useSidebar();
+
   return (
     <Sidebar variant="floating" className="bg-gray-900">
       <SidebarContent className="bg-gray-900 text-white rounded-t-lg">
@@ -85,8 +99,11 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="bg-gray-900 rounded-b-lg">
-        <SignOutButton redirectUrl="/sign-in">
-          <Button className="text-white mt-2 ml-2 hover:cursor-pointer z-50 bg-gray-800">
+        <SignOutButton redirectUrl="/sign-in" signOutOptions={{ redirectUrl: "/sign-in" }}>
+          <Button className="text-white mt-2 ml-2 hover:cursor-pointer z-50 bg-gray-800" onClick={() => {
+            setOpen(false);
+            setOpenMobile(false);
+          }}>
             <LogOut />
           </Button>
         </SignOutButton>
