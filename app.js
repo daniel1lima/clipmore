@@ -39,22 +39,14 @@ const PORT = process.env.PORT || 3000;
 // Get __dirname equivalent in ES modules
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Add middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Setup view engine
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
 
 // Remove authentication middleware
-app.use('/admin', adminRouter);
+// app.use('/admin', adminRouter);
 
 // Add root route
-app.get('/', (req, res) => {
-  res.redirect('/admin');
-});
+// app.get('/', (req, res) => {
+//   res.redirect('/admin');
+// });
 
 // Add health check endpoint
 app.get('/health', (req, res) => {
@@ -65,7 +57,7 @@ app.get('/health', (req, res) => {
  * Interactions endpoint URL where Discord will send HTTP requests
  * Parse request body and verifies incoming requests using discord-interactions package
  */
-app.post('/interactions', async function (req, res) {
+app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
   const { type, data, member, guild } = req.body;
   
   // Silently ignore DMs by returning early if there's no guild

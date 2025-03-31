@@ -10,7 +10,6 @@ export default async function handleStats(req, res, member) {
       where: { discordId: member.user.id }
     });
 
-    console.log(user);
 
     if (!user) {
       return res.send({
@@ -26,7 +25,6 @@ export default async function handleStats(req, res, member) {
       where: { UserId: user.id }
     });
 
-    console.log(accounts);
 
     if (!accounts.length) {
       return res.send({
