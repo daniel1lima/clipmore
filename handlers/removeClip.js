@@ -6,18 +6,14 @@ export default async function handleRemoveClip(req, res, member, options) {
   
   try {
     // Check if the clip exists and belongs to the user
-    const user = await db.User.findOne({
-      where: {
-        discordId: member.user.id
-      }
-    });
+    const user = await db.User.findByPk(member.user.id);
     let clip;
     
     if (user) {
       clip = await db.Clip.findOne({
         where: {
           url,
-          UserId: user.id
+          userDiscordId: user.discordId
         }
       });
     } else {

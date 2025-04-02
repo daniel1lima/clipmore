@@ -27,6 +27,14 @@ export default (sequelize) => {
     },
     verificationCode: {
       type: DataTypes.STRING
+    },
+    userDiscordId: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      references: {
+        model: 'Users',
+        key: 'discordId'
+      }
     }
   });
 

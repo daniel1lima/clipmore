@@ -7,9 +7,7 @@ export default async function handleRemoveAccount(req, res, member, options) {
 
   try {
     // First find the user
-    const user = await db.User.findOne({
-      where: { discordId: member.user.id }
-    });
+    const user = await db.User.findByPk(member.user.id);
 
     if (!user) {
       return res.send({
@@ -26,7 +24,7 @@ export default async function handleRemoveAccount(req, res, member, options) {
       where: {
         platform,
         username,
-        UserId: user.id // This should match the foreign key in your database
+        userDiscordId: user.discordId // This should match the foreign key in your database
       }
     });
 

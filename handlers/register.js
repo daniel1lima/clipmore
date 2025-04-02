@@ -7,15 +7,26 @@ export async function handleRegister(req, res, guild, member) {
   try {
     const guildId = guild['id'];
 
+    console.log(member);
+
+    
+
     const [user, created] = await db.User.findOrCreate({
       where: { discordId: member.user.id },
       defaults: {
-        isVerified: false
+        isVerified: false,
+        username: member.user.username,
+        joinedAt: member.joined_at
       }
     });
 
     if (!created && user) {
       await addRole(member.user.id, guildId, process.env.MEMBER_ROLE_NAME, false);
+
+      user.username = member.user.username;
+      user.joinedAt = member.joined_at;
+      await user.save();
+
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: MessageTemplates.alreadyRegistered(),

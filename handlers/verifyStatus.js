@@ -11,12 +11,10 @@ export default async function handleVerifyStatus(req, res, guild, member, option
   const guildId = guild['id'];
 
   try {
-    const basicUser = await db.User.findOne({
-      where: { discordId: member.user.id }
-    });
+    const basicUser = await db.User.findByPk(member.user.id);
 
     const account = await db.SocialMediaAccount.findOne({
-      where: { platform, username }
+      where: { platform, username, userDiscordId: basicUser.discordId }
     });
 
     if (!basicUser || !account) {

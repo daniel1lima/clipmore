@@ -31,6 +31,30 @@ export default (sequelize) => {
     consecutiveErrors: {
       type: DataTypes.INTEGER,
       defaultValue: 0
+    },
+    userDiscordId: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      references: {
+        model: 'Users',
+        key: 'discordId'
+      }
+    },
+    discordGuildId: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      references: {
+        model: 'Campaigns',
+        key: 'discordGuildId'
+      }
+    },
+    paymentId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'Payments',
+        key: 'id'
+      }
     }
   });
 

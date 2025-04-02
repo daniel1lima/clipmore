@@ -8,10 +8,10 @@ export const CampaignStatus = {
 
 export default (sequelize) => {
   const Campaign = sequelize.define("Campaign", {
-    id: {
-      type: DataTypes.INTEGER,
+    discordGuildId: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
       primaryKey: true,
-      autoIncrement: true,
     },
     name: {
       type: DataTypes.STRING,
@@ -61,10 +61,7 @@ export default (sequelize) => {
       type: DataTypes.DATE,
       allowNull: true,
     },
-    discordGuildId: {
-      type: DataTypes.STRING,
-      allowNull: false,
-    },
+    
     soundURL: {
       type: DataTypes.ARRAY(DataTypes.STRING),
       allowNull: true
@@ -74,7 +71,7 @@ export default (sequelize) => {
   // Define associations in the model
   Campaign.associate = (models) => {
     Campaign.hasMany(models.Clip, {
-      foreignKey: "campaignId",
+      foreignKey: "discordGuildId",
       as: "clips",
     });
   };

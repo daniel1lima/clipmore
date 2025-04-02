@@ -7,26 +7,71 @@ export default (sequelize) => {
       primaryKey: true,
       autoIncrement: true
     },
-    userId: {
-      type: DataTypes.INTEGER,
+    userDiscordId: {
+      type: DataTypes.STRING,
+      allowNull: false,
       references: {
         model: 'Users',
-        key: 'id'
+        key: 'discordId'
       }
     },
-    type: {
-      type: DataTypes.ENUM('USDT', 'CASHAPP', 'ETH', 'BTC', 'PAYPAL'),
+    discordGuildId: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      references: {
+        model: 'Campaigns',
+        key: 'discordGuildId'
+      }
+    },
+    amount: {
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: false
     },
-    address: {
+    totalViews: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0
+    },
+    clipCount: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0
+    },
+    status: {
+      type: DataTypes.ENUM('PENDING', 'PAID', 'FAILED'),
+      defaultValue: 'PENDING'
+    },
+    paidAt: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    paymentMethod: {
       type: DataTypes.STRING,
-      allowNull: false
+      allowNull: true
     },
-    isActive: {
+    expedite: {
       type: DataTypes.BOOLEAN,
-      defaultValue: true
+      defaultValue: false
+    },
+    createdBy: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    paidBy: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    transactionId: {
+      type: DataTypes.STRING,
+      allowNull: true
     }
   });
+
+  Payment.associate = (models) => {
+    Payment.belongsTo(models.User, { foreignKey: 'userDiscordId' });
+    Payment.belongsTo(models.Campaign, { foreignKey: 'discordGuildId' });
+    Payment.hasMany(models.Clip, { foreignKey: 'paymentId' });
+  };
 
   return Payment;
 }; 

@@ -274,7 +274,7 @@ export const MessageTemplates = {
         url: iconURL || 'https://drive.usercontent.google.com/download?id=1Aq7kl39paKgFaxqiNAjRcRPw7QoQfGSM'
       },
       footer: {
-        text: `Campaign Reference: ${campaign.id} • ClipMore`,
+        text: `Campaign Reference: ${campaign.discordGuildId} • ClipMore`,
       },
       timestamp: new Date()
     }],

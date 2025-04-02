@@ -18,8 +18,8 @@ export default async function handleLeaderboard(req, res) {
 
     // Get additional info for top clips
     const enrichedTopClips = await Promise.all(topClips.map(async (clip) => {
-      const account = await db.SocialMediaAccount.findByPk(clip.SocialMediaAccountId);
-      const user = await db.User.findByPk(account.UserId);
+      const account = await db.SocialMediaAccount.findByPk(clip.socialMediaAccountId);
+      const user = await db.User.findByPk(account.userDiscordId);
       
       return {
         ...clip.dataValues,
@@ -33,13 +33,13 @@ export default async function handleLeaderboard(req, res) {
     const users = await db.User.findAll();
     const userStats = await Promise.all(users.map(async (user) => {
       const accounts = await db.SocialMediaAccount.findAll({
-        where: { UserId: user.id }
+        where: { userDiscordId: user.discordId }
       });
 
       let totalViews = 0;
       for (const account of accounts) {
         const clips = await db.Clip.findAll({
-          where: { SocialMediaAccountId: account.id }
+          where: { socialMediaAccountId: account.id }
         });
         totalViews += clips.reduce((sum, clip) => sum + clip.views, 0);
       }

@@ -31,6 +31,7 @@ import adminRouter from './routes/admin.js';
 import session from 'express-session';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import cors from 'cors';
 
 // Create an express app
 const app = express();
@@ -39,9 +40,13 @@ const PORT = process.env.PORT || 3000;
 // Get __dirname equivalent in ES modules
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Add CORS middleware
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:8080', // Your Next.js app URL
+  credentials: true // Allow credentials
+}));
 
-// Remove authentication middleware
-// app.use('/admin', adminRouter);
+app.use('/admin', adminRouter);
 
 // Add root route
 // app.get('/', (req, res) => {

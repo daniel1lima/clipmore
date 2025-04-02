@@ -54,6 +54,7 @@ export default async function handleCreateCampaign(req, res, guild, member, opti
 
     // Create the campaign
     const campaign = await db.Campaign.create({
+      discordGuildId: guildId,
       name,
       description,
       rate,
@@ -61,7 +62,6 @@ export default async function handleCreateCampaign(req, res, guild, member, opti
       serverUrl,
       endDate,
       allowedPlatforms: platformsArray,
-      discordGuildId: guildId,
       status: 'ACTIVE',
       totalViews: 0,
       totalLikes: 0,
@@ -79,7 +79,7 @@ export default async function handleCreateCampaign(req, res, guild, member, opti
     }
 
     // Send confirmation DM to creator
-    await sendDM(member.user.id, `Campaign "${name}" created successfully!\nID: ${campaign.id}\nStatus: ${campaign.status}`);
+    await sendDM(member.user.id, `Campaign "${name}" created successfully!\nID: ${campaign.discordGuildId}\nStatus: ${campaign.status}`);
 
   } catch (error) {
     console.error('Error creating campaign:', error);

@@ -3,9 +3,7 @@ import { MessageTemplates } from '../utils/messageTemplates.js';
 import { InteractionResponseType } from 'discord-interactions';
 
 export default async function handleMyClips(req, res, member) {
-  const user = await db.User.findOne({
-    where: { discordId: member.user.id }
-  });
+  const user = await db.User.findByPk(member.user.id);
 
   if (!user) {
     return res.send({
@@ -15,7 +13,7 @@ export default async function handleMyClips(req, res, member) {
   }
 
   const clips = await db.Clip.findAll({
-    where: { UserId: user.id },
+    where: { userDiscordId: user.discordId },
     order: [['createdAt', 'DESC']] // Show newest clips first
   });
 
