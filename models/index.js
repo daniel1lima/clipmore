@@ -90,7 +90,7 @@ sequelize.authenticate()
   .then(() => {
     console.log('Database connection has been established successfully.');
     // Force a schema check and update with force: false to preserve data
-    return sequelize.sync({ alter: true });
+    return sequelize.sync({ force: true });
   })
   .then(() => {
     console.log('Database & tables created or updated!');
