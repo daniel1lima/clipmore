@@ -42,7 +42,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Add CORS middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3001', // Your Next.js app URL
+  origin: process.env.FRONTEND_URL || 'http://localhost:8080', // Your Next.js app URL
   credentials: true // Allow credentials
 }));
 

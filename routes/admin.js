@@ -9,195 +9,49 @@ dotenv.config();
 
 const router = express.Router();
 
+// // Handle clip moderation actions
+// router.post('/moderation/:clipId', async (req, res) => {
+//   const { clipId } = req.params;
+//   const { action, reason } = req.body;
 
-// Dashboard home
-router.get('/', async (req, res) => {
-  try {
-    // Fetch all clips with user info directly through association
-    const clips = await db.Clip.findAll({
-      include: [{
-        model: db.User,
-        attributes: ['discordId']
-      }],
-      order: [['createdAt', 'DESC']]
-    });
+//   try {
+//     const clip = await db.Clip.findByPk(clipId);
+//     if (!clip) {
+//       throw new Error('Clip not found');
+//     }
 
-    // Fetch active campaigns
-    const activeCampaigns = await db.Campaign.findAll({
-      where: { status: 'ACTIVE' },
-      order: [['createdAt', 'DESC']]
-    });
+//     const user = await db.User.findByPk(clip.UserId);
 
-    // Fetch recent logs
-    const logs = await db.Log.findAll({
-      order: [['timestamp', 'DESC']],
-      limit: 20
-    });
+//     // Update clip moderation status
+//     await db.ClipModeration.update({
+//       status: action,
+//       reason: reason || null,
+//       reviewedAt: new Date()
+//     }, {
+//       where: { clipId }
+//     });
 
-    // Get basic stats
-    const stats = {
-      totalClips: await db.Clip.count(),
-      totalUsers: await db.User.count(),
-      totalCampaigns: await db.Campaign.count(),
-      pendingModeration: await db.ClipModeration.count({ where: { status: 'PENDING' } })
-    };
+//     // Log the moderation action
+//     await Logger.log(LogLevel.AUDIT, LogCategory.CLIP, `Clip ${action.toLowerCase()}`, {
+//       clipId,
+//       action,
+//       reason,
+//       clipUrl: clip.url,
+//       userId: user?.id,
+//       username: user?.username
+//     });
 
-    res.render('admin/dashboard', {
-      clips,
-      campaigns: activeCampaigns,
-      logs,
-      stats,
-      moment
-    });
+//     res.json({ success: true });
+//   } catch (error) {
+//     console.error('Moderation error:', error);
+//     await Logger.log(LogLevel.ERROR, LogCategory.CLIP, 'Moderation action failed', {
+//       clipId,
+//       error: error.message
+//     });
+//     res.status(500).json({ error: 'Moderation action failed' });
+//   }
+// });
 
-  } catch (error) {
-    console.error('Dashboard error:', error);
-    res.status(500).render('error', { 
-      message: 'Failed to load dashboard',
-      error: { status: 500, stack: process.env.NODE_ENV === 'development' ? error.stack : '' }
-    });
-  }
-});
-
-// Logs view
-router.get('/logs', async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = 50;
-  const offset = (page - 1) * limit;
-  const { startDate, endDate, logLevel, logCategory } = req.query;
-
-  const whereConditions = {};
-  if (startDate && endDate) {
-    whereConditions.timestamp = {
-      [db.Sequelize.Op.between]: [new Date(startDate), new Date(endDate)]
-    };
-  }
-  if (logLevel) {
-    whereConditions.level = logLevel;
-  }
-  if (logCategory) {
-    whereConditions.category = logCategory;
-  }
-
-  try {
-    const logs = await db.Log.findAndCountAll({
-      where: whereConditions,
-      order: [['timestamp', 'DESC']],
-      limit,
-      offset
-    });
-
-    res.render('admin/logs', {
-      logs: logs.rows || [],
-      totalPages: Math.ceil(logs.count / limit),
-      currentPage: page,
-      startDate,
-      endDate,
-      logLevel,
-      logCategory,
-      moment
-    });
-  } catch (error) {
-    res.status(500).render('error', { 
-      message: 'Failed to load logs',
-      error: { status: 500, stack: process.env.NODE_ENV === 'development' ? error.stack : '' }
-    });
-  }
-});
-
-// Clip moderation
-router.get('/moderation', async (req, res) => {
-  try {
-    const pendingClips = await db.ClipModeration.findAll({
-      where: { status: 'PENDING' },
-      include: [{
-        model: db.Clip,
-        include: [{ model: db.User }]
-      }]
-    });
-
-    res.render('admin/moderation', { clips: pendingClips });
-  } catch (error) {
-    res.status(500).render('admin/error', { error: 'Failed to load moderation queue' });
-  }
-});
-
-// Handle clip moderation actions
-router.post('/moderation/:clipId', async (req, res) => {
-  const { clipId } = req.params;
-  const { action, reason } = req.body;
-
-  try {
-    const clip = await db.Clip.findByPk(clipId);
-    if (!clip) {
-      throw new Error('Clip not found');
-    }
-
-    const user = await db.User.findByPk(clip.UserId);
-
-    // Update clip moderation status
-    await db.ClipModeration.update({
-      status: action,
-      reason: reason || null,
-      reviewedAt: new Date()
-    }, {
-      where: { clipId }
-    });
-
-    // Log the moderation action
-    await Logger.log(LogLevel.AUDIT, LogCategory.CLIP, `Clip ${action.toLowerCase()}`, {
-      clipId,
-      action,
-      reason,
-      clipUrl: clip.url,
-      userId: user?.id,
-      username: user?.username
-    });
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Moderation error:', error);
-    await Logger.log(LogLevel.ERROR, LogCategory.CLIP, 'Moderation action failed', {
-      clipId,
-      error: error.message
-    });
-    res.status(500).json({ error: 'Moderation action failed' });
-  }
-});
-
-// Route to display all clips
-router.get('/clips', async (req, res) => {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = 50;
-    const offset = (page - 1) * limit;
-
-    const { count, rows: clips } = await db.Clip.findAndCountAll({
-      include: [{
-        model: db.User,
-        attributes: ['discordId']
-      }, {
-        model: db.Campaign,
-        attributes: ['discordGuildId', 'name']
-      }],
-      order: [['createdAt', 'DESC']],
-      limit,
-      offset
-    });
-
-    // No need for separate user/campaign fetching since we're using includes
-
-    res.render('admin/clips', {
-      clips,
-      totalPages: Math.ceil(count / limit),
-      currentPage: page,
-      moment
-    });
-  } catch (error) {
-    console.error('Error fetching clips:', error);
-    res.status(500).render('error', { error: 'Failed to load clips' });
-  }
-});
 
 // ... existing code ...
 router.delete('/clips/:clipId', async (req, res) => {
@@ -211,93 +65,29 @@ router.delete('/clips/:clipId', async (req, res) => {
     }
   });
 
-router.get('/campaigns', async (req, res) => {
-  try {
-    const campaigns = await db.Campaign.findAll({
-      include: [{
-        model: db.Clip,
-        attributes: ['id']
-      }],
-      order: [['createdAt', 'DESC']]
-    });
 
-    // Add clip count to each campaign
-    const campaignsWithData = campaigns.map(campaign => ({
-      ...campaign.toJSON(),
-      clipCount: campaign.Clips?.length || 0
-    }));
-
-    res.render('admin/campaigns', { 
-      campaigns: campaignsWithData,
-      moment
-    });
-  } catch (error) {
-    res.status(500).render('error', { error });
-  }
-});
-
-// Add export functionality for logs
-router.get('/logs/export', async (req, res) => {
-  try {
-    const logs = await db.Log.findAll({
-      order: [['timestamp', 'DESC']],
-      raw: true
-    });
-
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', 'attachment; filename=logs.json');
-    res.json(logs);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to export logs' });
-  }
-});
-
-// Route to display a specific clip
-router.get('/clip/:clipId', async (req, res) => {
-  const { clipId } = req.params;
-  try {
-    const clip = await db.Clip.findByPk(clipId, {
-      include: [{ model: db.User, attributes: ['discordId'] }]
-    });
-
-    if (!clip) {
-      return res.status(404).render('error', { error: 'Clip not found' });
-    }
-
-    res.render('admin/clip', { clip, moment });
-  } catch (error) {
-    console.error('Error fetching clip:', error);
-    res.status(500).render('error', { error: 'Failed to load clip details' });
-  }
-});
-
-// Route to display a specific campaign
-router.get('/campaign/:campaignId', async (req, res) => {
-  const { campaignId } = req.params;
-  try {
-    const campaign = await db.Campaign.findByPk(campaignId);
-
-    if (!campaign) {
-      return res.status(404).render('error', { message: 'Campaign not found' });
-    }
-
-    res.render('admin/campaign', { campaign, moment });
-  } catch (error) {
-    console.error('Error fetching campaign:', error);
-    res.status(500).render('error', { message: 'Failed to load campaign details' });
-  }
-});
 
 // API Routes for Dashboard
 router.get('/dashboard/stats', async (req, res) => {
+
   try {
-    const stats = {
-      totalClips: await db.Clip.count(),
-      totalUsers: await db.User.count(),
+    const DashboardStats = {
       totalCampaigns: await db.Campaign.count(),
-      pendingModeration: await db.ClipModeration.count({ where: { status: 'PENDING' } })
-    };
-    res.json(stats);
+      totalViews: await db.Clip.sum('views'),
+      totalBudget: await db.Campaign.sum('maxPayout'),
+      totalClipperEarnings: await db.Payment.sum('amount', {
+        where: {
+          status: 'PAID'
+        }
+      }),
+      totalActiveClippers: await db.User.count({
+        where: {
+          isVerified: true
+        }
+      }),
+    }
+    
+    res.json(DashboardStats);
   } catch (error) {
     console.error('Error fetching stats:', error);
     res.status(500).json({ error: 'Failed to fetch stats' });
@@ -307,11 +97,16 @@ router.get('/dashboard/stats', async (req, res) => {
 router.get('/dashboard/campaigns', async (req, res) => {
   try {
     const campaigns = await db.Campaign.findAll({
-      where: { status: 'ACTIVE' },
       order: [['createdAt', 'DESC']],
       limit: 10
     });
-    res.json(campaigns);
+    const campaignsWithClipCount = await Promise.all(campaigns.map(async (campaign) => {
+      const clipCount = await db.Clip.count({
+        where: { discordGuildId: campaign.discordGuildId }
+      });
+      return { ...campaign.toJSON(), clipCount };
+    }));
+    res.json(campaignsWithClipCount);
   } catch (error) {
     console.error('Error fetching campaigns:', error);
     res.status(500).json({ error: 'Failed to fetch campaigns' });
